@@ -1,2 +1,9 @@
-skills/
 node_modules/
+.next/
+db/*.db
+*.log
+.env
+.env.local
+.env.production
+tool-results/
+scripts/node_modules/

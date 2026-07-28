@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ===========================
+// CORE MARITIME DOMAIN MODELS
+// ===========================
+
+model Port {
+  id          String   @id @default(cuid())
+  name        String
+  countryCode String
+  region      String
+  latitude    Float
+  longitude   Float
+  unlocode    String?  @unique
+  portType    String?   @default("Seaport")
+  harborSize  String?
+  shelter     String?
+  depth       Float?
+  cargoTypes  String?   @default("General Cargo")
+  tidalRange  Float?
+  remarks     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  originShipments  Shipment[] @relation("ShipmentOrigin")
+  destShipments    Shipment[] @relation("ShipmentDest")
+  arrivals         VesselArrival[]
+  departures       VesselDeparture[]
+}
+
+model Vessel {
+  id            String   @id @default(cuid())
+  mmsi          Int      @unique
+  imo           Int?     @unique
+  name          String
+  callSign      String?
+  vesselType    String   @default("Cargo")
+  flagCountry   String?
+  grossTonnage  Float?
+  deadweight    Float?
+  length        Float?
+  breadth       Float?
+  draft         Float?
+  yearBuilt     Int?
+  status        String   @default("Active")
+  lastPosition  DateTime?
+  latitude      Float?
+  longitude     Float?
+  speed         Float?   @default(0)
+  heading       Float?
+  destination   String?
+  eta           DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  arrivals   VesselArrival[]
+  departures VesselDeparture[]
+  containers Container[]
+  shipments  Shipment[]
+}
+
+model Shipment {
+  id            String   @id @default(cuid())
+  billOfLading  String?  @unique
+  bookingRef    String?
+  status        String   @default("Booked") // Booked, In Transit, Arrived, Delivered, Cancelled
+  cargoType     String?
+  cargoWeight   Float?   @default(0)
+  cargoValue    Float?
+  cargoDesc     String?
+  hsCode        String?
+  vesselId      String
+  originPortId  String
+  destPortId    String
+  departureDate DateTime?
+  arrivalDate   DateTime?
+  etd           DateTime?
+  eta           DateTime?
+  transitDays   Int?
+  freightCost   Float?
+  currency      String   @default("USD")
+  shipper       String?
+  consignee     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  vessel     Vessel @relation(fields: [vesselId], references: [id])
+  originPort Port   @relation("ShipmentOrigin", fields: [originPortId], references: [id])
+  destPort   Port   @relation("ShipmentDest", fields: [destPortId], references: [id])
+  containers Container[]
+}
+
+model Container {
+  id          String   @id @default(cuid())
+  containerNo String   @unique
+  isoType     String?  @default("20DRY")
+  size        String?  @default("20FT")
+  status      String   @default("Empty") // Empty, Loaded, In Transit, Arrived
+  weight      Float?   @default(0)
+  vesselId    String?
+  shipmentId  String?
+  originPort  String?
+  destPort    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  vessel   Vessel?   @relation(fields: [vesselId], references: [id])
+  shipment Shipment? @relation(fields: [shipmentId], references: [id])
+}
+
+model VesselArrival {
+  id        String   @id @default(cuid())
+  vesselId  String
+  portId    String
+  arrivalAt DateTime @default(now())
+  purpose   String?  @default("Cargo")
+  createdAt DateTime @default(now())
+
+  vessel Vessel @relation(fields: [vesselId], references: [id])
+  port   Port   @relation(fields: [portId], references: [id])
+}
+
+model VesselDeparture {
+  id          String   @id @default(cuid())
+  vesselId    String
+  portId      String
+  departedAt  DateTime @default(now())
+  destination String?
+  createdAt   DateTime @default(now())
+
+  vessel Vessel @relation(fields: [vesselId], references: [id])
+  port   Port   @relation(fields: [portId], references: [id])
+}
+
+model TradeData {
+  id              String   @id @default(cuid())
+  reporterCode    String
+  partnerCode     String
+  year            Int
+  tradeFlow       String   // Import, Export, Re-export
+  commodityCode   String   // HS Code
+  commodityDesc   String?
+  grossWeightKg   Float?
+  tradeValueUsd   Float?
+  quantity        Float?
+  originPort      String?
+  destPort        String?
+  transportMode   String?  @default("Sea")
+  dataSource      String?  @default("UN Comtrade")
+  fetchedAt       DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      String   @default("Viewer") // Admin, Manager, Viewer
+  company   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
