@@ -29,6 +29,10 @@ export async function GET(request: Request) {
         skip,
         take: limit,
         orderBy: { lastPosition: 'desc' },
+        include: {
+          carrier: { select: { name: true, code: true, alliance: true } },
+          tradeRoute: { select: { name: true, code: true, originRegion: true, destRegion: true } },
+        },
       }),
       db.vessel.count({ where }),
     ])
@@ -74,6 +78,8 @@ export async function POST(request: Request) {
         destination: body.destination || null,
         eta: body.eta ? new Date(body.eta) : null,
         lastPosition: body.lastPosition ? new Date(body.lastPosition) : new Date(),
+        carrierId: body.carrierId || null,
+        tradeRouteId: body.tradeRouteId || null,
       },
     })
 

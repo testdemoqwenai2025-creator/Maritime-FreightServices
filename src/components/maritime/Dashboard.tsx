@@ -6,7 +6,8 @@ import {
   Navigation, BarChart3, MapPin, Clock, DollarSign,
   ChevronRight, ChevronDown, Activity, Waves, Thermometer,
   Shield, AlertTriangle, FileText, Truck, Gauge, Fuel, Wrench,
-  Users, Building, Warehouse, Snowflake, Radio, Flame
+  Users, Building, Warehouse, Snowflake, Radio, Flame,
+  Plane, Handshake, BookOpen, Route
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -130,9 +131,17 @@ interface DashboardData {
   summary: {
     totalVessels: number
     activeVessels: number
+    inPortVessels: number
     totalPorts: number
     totalShipments: number
     totalContainers: number
+    totalDocuments: number
+    totalTradeRecords: number
+    totalCarriers: number
+    totalCharters: number
+    totalBookings: number
+    totalCargoTypes: number
+    totalTradeRoutes: number
   }
   shipmentsByStatus: { status: string; count: number }[]
   vesselTypeBreakdown: { type: string; count: number }[]
@@ -142,29 +151,25 @@ interface DashboardData {
     id: string
     arrivalAt: string
     purpose: string
-    vessel: { name: string; flagCountry: string; vesselType: string }
-    port: { name: string; countryCode: string }
+    vessel: { name: string; flagCountry: string; vesselType: string; carrier?: { name: string; code: string } | null }
+    port: { name: string; countryCode: string; congestionLevel?: string | null }
   }>
   tradeOverview: {
     totalTradeValue: number
     totalGrossWeight: number
     totalCO2: number
   }
-  topTradePartners: { partnerCode: string; partnerName: string; totalValue: number; totalWeight: number }[]
-  tradeByRoute: Array<{
-    route: string
-    tradeValue: number
-    voyages: number
-    avgFreightRate: number
-  }>
+  topTradePartners: { partnerCode: string; totalValue: number }[]
+  tradeByRoute: { route: string; totalValue: number; co2Emissions: number }[]
   congestionDistribution: { level: string; count: number }[]
-  documentStats: {
-    total: number
-    approved: number
-    pending: number
-    rejected: number
-    byType: { docType: string; count: number }[]
-  }
+  documentStats: { status: string; count: number }[]
+  // New data
+  allianceBreakdown: { alliance: string; count: number; totalTEU: number }[]
+  carrierStats: { avgReliability: number; avgCO2PerTEU: number }
+  topCarriers: { name: string; code: string; totalTEUCapacity: number; fleetSize: number; reliability: number }[]
+  bookingStatusBreakdown: { status: string; count: number }[]
+  charterTypeBreakdown: { type: string; count: number }[]
+  dangerousCargoCount: number
 }
 
 interface ShipmentContainer {
@@ -199,7 +204,9 @@ interface Shipment {
   customsRef: string
   priority: string
   serviceLevel: string
-  vessel: { name: string; mmsi: string; flagCountry: string }
+  vessel: { name: string; mmsi: string; flagCountry: string; carrier?: { name: string; code: string } | null }
+  carrier?: { name: string; code: string } | null
+  tradeRoute?: { name: string; code: string } | null
   originPort: { name: string; countryCode: string; unlocode: string }
   destPort: { name: string; countryCode: string; unlocode: string }
   containers: ShipmentContainer[]
@@ -208,7 +215,7 @@ interface Shipment {
 interface Vessel {
   id: string
   mmsi: string
-  imo: string
+  imo: number
   name: string
   callSign: string
   vesselType: string
@@ -242,6 +249,8 @@ interface Vessel {
   yearBuilt: number
   status: string
   lastPosition: string
+  carrier?: { name: string; code: string; alliance: string } | null
+  tradeRoute?: { name: string; code: string; originRegion: string; destRegion: string } | null
 }
 
 interface TradeRecord {
@@ -355,15 +364,18 @@ function EmptyState({ message }: { message: string }) {
 
 function OverviewPanel({ data }: { data: DashboardData | null }) {
   if (!data) return <LoadingSpinner />
-  const { summary, shipmentsByStatus, vesselTypeBreakdown, vesselStatusBreakdown, containerStatusBreakdown, recentArrivals, tradeOverview, topTradePartners, tradeByRoute, congestionDistribution, documentStats } = data
+  const { summary, shipmentsByStatus, vesselTypeBreakdown, vesselStatusBreakdown, containerStatusBreakdown, recentArrivals, tradeOverview, topTradePartners, tradeByRoute, congestionDistribution, documentStats, allianceBreakdown, carrierStats, topCarriers, bookingStatusBreakdown, charterTypeBreakdown, dangerousCargoCount } = data
 
   const totalShipmentCount = shipmentsByStatus.reduce((a, b) => a + b.count, 0)
   const totalVesselCount = vesselTypeBreakdown.reduce((a, b) => a + b.count, 0)
+  const approvedDocs = documentStats.find(d => d.status === 'Approved')?.count || 0
+  const pendingDocs = documentStats.find(d => d.status === 'Pending')?.count || 0
+  const rejectedDocs = documentStats.find(d => d.status === 'Rejected')?.count || 0
 
   return (
     <div className="space-y-6">
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
+      {/* KPI Cards — 12 cards */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:grid-cols-6">
         <Card className="border-neutral-200">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-neutral-500">
@@ -381,6 +393,7 @@ function OverviewPanel({ data }: { data: DashboardData | null }) {
               <span className="text-xs font-medium uppercase tracking-wider">Ports</span>
             </div>
             <p className="mt-2 text-2xl font-bold text-neutral-900">{formatNumber(summary.totalPorts)}</p>
+            <p className="mt-1 text-xs text-neutral-400">{formatNumber(summary.inPortVessels)} in port</p>
           </CardContent>
         </Card>
         <Card className="border-neutral-200">
@@ -413,11 +426,68 @@ function OverviewPanel({ data }: { data: DashboardData | null }) {
         <Card className="border-neutral-200">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-neutral-500">
+              <Handshake className="h-4 w-4" />
+              <span className="text-xs font-medium uppercase tracking-wider">Carriers</span>
+            </div>
+            <p className="mt-2 text-2xl font-bold text-neutral-900">{formatNumber(summary.totalCarriers)}</p>
+            <p className="mt-1 text-xs text-neutral-400">{(carrierStats.avgReliability || 0).toFixed(1)}% avg reliability</p>
+          </CardContent>
+        </Card>
+        <Card className="border-neutral-200">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-neutral-500">
+              <Route className="h-4 w-4" />
+              <span className="text-xs font-medium uppercase tracking-wider">Trade Routes</span>
+            </div>
+            <p className="mt-2 text-2xl font-bold text-neutral-900">{formatNumber(summary.totalTradeRoutes)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-neutral-200">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-neutral-500">
+              <BookOpen className="h-4 w-4" />
+              <span className="text-xs font-medium uppercase tracking-wider">Bookings</span>
+            </div>
+            <p className="mt-2 text-2xl font-bold text-neutral-900">{formatNumber(summary.totalBookings)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-neutral-200">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-neutral-500">
               <FileText className="h-4 w-4" />
               <span className="text-xs font-medium uppercase tracking-wider">Documents</span>
             </div>
-            <p className="mt-2 text-2xl font-bold text-neutral-900">{formatNumber(documentStats.total)}</p>
-            <p className="mt-1 text-xs text-green-600">{documentStats.approved} approved</p>
+            <p className="mt-2 text-2xl font-bold text-neutral-900">{formatNumber(summary.totalDocuments)}</p>
+            <p className="mt-1 text-xs text-green-600">{approvedDocs} approved</p>
+          </CardContent>
+        </Card>
+        <Card className="border-neutral-200">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-neutral-500">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="text-xs font-medium uppercase tracking-wider">DG Cargo</span>
+            </div>
+            <p className="mt-2 text-2xl font-bold text-neutral-900">{formatNumber(dangerousCargoCount)}</p>
+            <p className="mt-1 text-xs text-amber-600">types registered</p>
+          </CardContent>
+        </Card>
+        <Card className="border-neutral-200">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-neutral-500">
+              <Fuel className="h-4 w-4" />
+              <span className="text-xs font-medium uppercase tracking-wider">CO2/TEU</span>
+            </div>
+            <p className="mt-2 text-2xl font-bold text-neutral-900">{(carrierStats.avgCO2PerTEU || 0).toFixed(1)}g</p>
+            <p className="mt-1 text-xs text-neutral-400">fleet average</p>
+          </CardContent>
+        </Card>
+        <Card className="border-neutral-200">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-neutral-500">
+              <Gauge className="h-4 w-4" />
+              <span className="text-xs font-medium uppercase tracking-wider">Charters</span>
+            </div>
+            <p className="mt-2 text-2xl font-bold text-neutral-900">{formatNumber(summary.totalCharters)}</p>
           </CardContent>
         </Card>
       </div>
@@ -523,15 +593,15 @@ function OverviewPanel({ data }: { data: DashboardData | null }) {
             <CardContent>
               <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-lg bg-green-50 p-3 text-center">
-                  <p className="text-lg font-bold text-green-700">{documentStats.approved}</p>
+                  <p className="text-lg font-bold text-green-700">{approvedDocs}</p>
                   <p className="text-xs text-green-600">Approved</p>
                 </div>
                 <div className="rounded-lg bg-amber-50 p-3 text-center">
-                  <p className="text-lg font-bold text-amber-700">{documentStats.pending}</p>
+                  <p className="text-lg font-bold text-amber-700">{pendingDocs}</p>
                   <p className="text-xs text-amber-600">Pending</p>
                 </div>
                 <div className="rounded-lg bg-red-50 p-3 text-center">
-                  <p className="text-lg font-bold text-red-700">{documentStats.rejected}</p>
+                  <p className="text-lg font-bold text-red-700">{rejectedDocs}</p>
                   <p className="text-xs text-red-600">Rejected</p>
                 </div>
               </div>
@@ -1297,7 +1367,11 @@ function CompliancePanel() {
 
   if (loading) return <LoadingSpinner />
 
-  const docStats = dashboardData?.documentStats
+  const docStats = dashboardData?.documentStats || []
+  const totalDocs = docStats.reduce((a, b) => a + b.count, 0)
+  const approvedCount = docStats.find(d => d.status === 'Approved')?.count || 0
+  const pendingCount = docStats.find(d => d.status === 'Pending')?.count || 0
+  const rejectedCount = docStats.find(d => d.status === 'Rejected')?.count || 0
 
   return (
     <div className="space-y-6">
@@ -1309,7 +1383,7 @@ function CompliancePanel() {
               <FileText className="h-4 w-4" />
               <span className="text-xs font-medium uppercase tracking-wider">Total Docs</span>
             </div>
-            <p className="mt-2 text-2xl font-bold text-neutral-900">{docStats?.total ?? '—'}</p>
+            <p className="mt-2 text-2xl font-bold text-neutral-900">{totalDocs}</p>
           </CardContent>
         </Card>
         <Card className="border-neutral-200">
@@ -1318,7 +1392,7 @@ function CompliancePanel() {
               <Shield className="h-4 w-4" />
               <span className="text-xs font-medium uppercase tracking-wider">Approved</span>
             </div>
-            <p className="mt-2 text-2xl font-bold text-green-700">{docStats?.approved ?? '—'}</p>
+            <p className="mt-2 text-2xl font-bold text-green-700">{approvedCount}</p>
           </CardContent>
         </Card>
         <Card className="border-neutral-200">
@@ -1327,7 +1401,7 @@ function CompliancePanel() {
               <Clock className="h-4 w-4" />
               <span className="text-xs font-medium uppercase tracking-wider">Pending</span>
             </div>
-            <p className="mt-2 text-2xl font-bold text-amber-700">{docStats?.pending ?? '—'}</p>
+            <p className="mt-2 text-2xl font-bold text-amber-700">{pendingCount}</p>
           </CardContent>
         </Card>
         <Card className="border-neutral-200">
@@ -1336,32 +1410,10 @@ function CompliancePanel() {
               <AlertTriangle className="h-4 w-4" />
               <span className="text-xs font-medium uppercase tracking-wider">Rejected</span>
             </div>
-            <p className="mt-2 text-2xl font-bold text-red-700">{docStats?.rejected ?? '—'}</p>
+            <p className="mt-2 text-2xl font-bold text-red-700">{rejectedCount}</p>
           </CardContent>
         </Card>
       </div>
-
-      {/* Documents by Type */}
-      {docStats?.byType && docStats.byType.length > 0 && (
-        <Card className="border-neutral-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base font-semibold text-neutral-900">
-              <BarChart3 className="h-4 w-4" />
-              Documents by Type
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {docStats.byType.map((dt) => (
-                <div key={dt.docType} className="rounded-lg border border-neutral-200 bg-white p-3">
-                  <p className="text-sm font-medium text-neutral-900">{dt.docType}</p>
-                  <p className="text-lg font-bold text-neutral-700">{dt.count}</p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Document List Grouped by Shipment */}
       <Card className="border-neutral-200">
@@ -1444,6 +1496,256 @@ function CompliancePanel() {
   )
 }
 
+// ─── Carriers Panel ──────────────────────────────────────────────────
+
+interface CarrierRecord {
+  id: string; name: string; code: string; country: string; headquarters: string;
+  website: string; foundedYear: number; fleetSize: number; totalTEUCapacity: number;
+  alliance: string; isTop20: boolean; isFCL: boolean; isLCL: boolean; isReefer: boolean; isDG: boolean;
+  transitTimeDays: number; reliability: number; co2PerTeu: number; contactEmail: string; remarks: string;
+  _count: { vessels: number; shipments: number; charters: number; bookings: number }
+}
+
+function CarriersPanel() {
+  const [carriers, setCarriers] = useState<CarrierRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [allianceFilter, setAllianceFilter] = useState('All')
+
+  useEffect(() => {
+    fetch('/api/carriers?limit=50')
+      .then((r) => r.json())
+      .then((json) => { setCarriers(json.data || []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (loading) return <LoadingSpinner />
+  if (carriers.length === 0) return <EmptyState message="No carriers found" />
+
+  const alliances = ['All', ...Array.from(new Set(carriers.map(c => c.alliance).filter(Boolean)))]
+  const filtered = allianceFilter === 'All' ? carriers : carriers.filter(c => c.alliance === allianceFilter)
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        {alliances.map(a => (
+          <Badge key={a} variant={allianceFilter === a ? 'default' : 'outline'}
+            className={`cursor-pointer text-xs ${allianceFilter === a ? 'bg-neutral-900 text-white' : ''}`}
+            onClick={() => setAllianceFilter(a)}>{a}</Badge>
+        ))}
+      </div>
+      <ScrollArea className="max-h-[600px]">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {filtered.map(c => (
+            <Card key={c.id} className="border-neutral-200">
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-sm font-semibold text-neutral-900">{c.name}</CardTitle>
+                    <p className="text-xs text-neutral-500">{c.code} · {c.country}</p>
+                  </div>
+                  {c.isTop20 && <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">Top 20</Badge>}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div><span className="text-neutral-500">Fleet:</span> <span className="font-medium text-neutral-900">{c.fleetSize || '—'}</span></div>
+                  <div><span className="text-neutral-500">TEU:</span> <span className="font-medium text-neutral-900">{formatNumber(c.totalTEUCapacity || 0)}</span></div>
+                  <div><span className="text-neutral-500">Reliability:</span> <span className={`font-medium ${(c.reliability || 0) >= 80 ? 'text-green-700' : 'text-amber-700'}`}>{(c.reliability || 0).toFixed(1)}%</span></div>
+                  <div><span className="text-neutral-500">CO2/TEU:</span> <span className="font-medium text-neutral-900">{(c.co2PerTeu || 0).toFixed(1)}g</span></div>
+                </div>
+                <Separator className="my-2" />
+                <div className="flex flex-wrap gap-1">
+                  {c.alliance && <Badge variant="outline" className="bg-neutral-50 text-neutral-600 border-neutral-200 text-xs">{c.alliance}</Badge>}
+                  {c.isFCL && <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200 text-xs">FCL</Badge>}
+                  {c.isLCL && <Badge variant="outline" className="bg-purple-50 text-purple-600 border-purple-200 text-xs">LCL</Badge>}
+                  {c.isReefer && <Badge variant="outline" className="bg-cyan-50 text-cyan-600 border-cyan-200 text-xs">Reefer</Badge>}
+                  {c.isDG && <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 text-xs">DG</Badge>}
+                </div>
+                <div className="flex gap-3 text-xs text-neutral-500">
+                  <span>{c._count.vessels} vessels</span>
+                  <span>{c._count.shipments} shipments</span>
+                  <span>{c._count.bookings} bookings</span>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
+  )
+}
+
+// ─── Charters Panel ──────────────────────────────────────────────────
+
+interface CharterRecord {
+  id: string; charterType: string; charterer: string; startDate: string; endDate: string;
+  durationDays: number; ratePerDay: number; currency: string; totalValue: number;
+  deliveryPort: string; redeliveryPort: string; bunkers: string; status: string; remarks: string;
+  vessel: { name: string; mmsi: number; imo: number; vesselType: string; flagCountry: string };
+  carrier?: { name: string; code: string } | null;
+}
+
+function ChartersPanel() {
+  const [charters, setCharters] = useState<CharterRecord[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/charters?limit=50')
+      .then((r) => r.json())
+      .then((json) => { setCharters(json.data || []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (loading) return <LoadingSpinner />
+  if (charters.length === 0) return <EmptyState message="No charters found" />
+
+  return (
+    <ScrollArea className="max-h-[600px]">
+      <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-neutral-50">
+            <TableHead>Vessel</TableHead>
+            <TableHead>Charterer</TableHead>
+            <TableHead className="hidden md:table-cell">Type</TableHead>
+            <TableHead className="hidden md:table-cell">Duration</TableHead>
+            <TableHead className="hidden lg:table-cell">Rate/Day</TableHead>
+            <TableHead className="hidden lg:table-cell">Total Value</TableHead>
+            <TableHead className="hidden xl:table-cell">Delivery → Redelivery</TableHead>
+            <TableHead>Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {charters.map(ch => (
+            <TableRow key={ch.id} className="hover:bg-neutral-50">
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <Ship className="h-4 w-4 text-neutral-500" />
+                  <div>
+                    <p className="text-sm font-medium text-neutral-900">{ch.vessel.name}</p>
+                    <p className="text-xs text-neutral-500">{ch.vessel.imo ? `IMO ${ch.vessel.imo}` : `MMSI ${ch.vessel.mmsi}`}</p>
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell className="text-sm text-neutral-900">{ch.charterer || '—'}</TableCell>
+              <TableCell className="hidden md:table-cell"><Badge variant="outline" className="text-xs bg-neutral-50 border-neutral-200">{ch.charterType}</Badge></TableCell>
+              <TableCell className="hidden md:table-cell text-xs text-neutral-700">{ch.durationDays || '—'} days</TableCell>
+              <TableCell className="hidden lg:table-cell text-xs font-medium text-neutral-900">{ch.ratePerDay ? `${formatCurrency(ch.ratePerDay)}/day` : '—'}</TableCell>
+              <TableCell className="hidden lg:table-cell text-xs font-medium text-neutral-900">{ch.totalValue ? formatCurrency(ch.totalValue) : '—'}</TableCell>
+              <TableCell className="hidden xl:table-cell text-xs text-neutral-600">{ch.deliveryPort} → {ch.redeliveryPort}</TableCell>
+              <TableCell>
+                <Badge variant="outline" className={
+                  ch.status === 'Active' ? 'bg-green-100 text-green-800 border-green-200' :
+                  ch.status === 'Completed' ? 'bg-neutral-100 text-neutral-700 border-neutral-200' :
+                  ch.status === 'Terminated' ? 'bg-red-100 text-red-800 border-red-200' :
+                  'bg-amber-100 text-amber-800 border-amber-200'
+                }>{ch.status}</Badge>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </ScrollArea>
+  )
+}
+
+// ─── Bookings Panel ───────────────────────────────────────────────────
+
+interface BookingRecord {
+  id: string; bookingNumber: string; bookingDate: string; cutoffDate: string;
+  status: string; containerCount: number; teuBooked: number; weightBookedKg: number;
+  commodity: string; specialInstructions: string; equipmentType: string;
+  rate: number; rateCurrency: string; rateType: string;
+  carrier?: { name: string; code: string } | null;
+  vessel: { name: string; mmsi: number; imo: number };
+  originPort: { name: string; countryCode: string; unlocode: string };
+  destPort: { name: string; countryCode: string; unlocode: string };
+  shipment?: { billOfLading: string; status: string } | null;
+}
+
+function BookingsPanel() {
+  const [bookings, setBookings] = useState<BookingRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [statusFilter, setStatusFilter] = useState('All')
+
+  useEffect(() => {
+    fetch('/api/bookings?limit=50')
+      .then((r) => r.json())
+      .then((json) => { setBookings(json.data || []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (loading) return <LoadingSpinner />
+  if (bookings.length === 0) return <EmptyState message="No bookings found" />
+
+  const statuses = ['All', ...Array.from(new Set(bookings.map(b => b.status)))]
+  const filtered = statusFilter === 'All' ? bookings : bookings.filter(b => b.status === statusFilter)
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        {statuses.map(s => (
+          <Badge key={s} variant={statusFilter === s ? 'default' : 'outline'}
+            className={`cursor-pointer text-xs ${statusFilter === s ? 'bg-neutral-900 text-white' : ''}`}
+            onClick={() => setStatusFilter(s)}>{s}</Badge>
+        ))}
+      </div>
+      <ScrollArea className="max-h-[600px]">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-neutral-50">
+              <TableHead>Booking #</TableHead>
+              <TableHead className="hidden md:table-cell">Carrier</TableHead>
+              <TableHead>Route</TableHead>
+              <TableHead className="hidden lg:table-cell">Equipment</TableHead>
+              <TableHead className="hidden md:table-cell">TEU</TableHead>
+              <TableHead className="hidden lg:table-cell">Rate</TableHead>
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.map(b => (
+              <TableRow key={b.id} className="hover:bg-neutral-50">
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-neutral-500" />
+                    <div>
+                      <p className="font-mono text-sm font-medium text-neutral-900">{b.bookingNumber}</p>
+                      <p className="text-xs text-neutral-500">{b.commodity}</p>
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell className="hidden md:table-cell text-xs text-neutral-700">{b.carrier?.name || '—'} <span className="text-neutral-400">({b.carrier?.code})</span></TableCell>
+                <TableCell className="text-xs">
+                  <span className="text-neutral-900">{b.originPort.name}</span>
+                  <span className="text-neutral-400"> → </span>
+                  <span className="text-neutral-900">{b.destPort.name}</span>
+                </TableCell>
+                <TableCell className="hidden lg:table-cell">
+                  <Badge variant="outline" className="bg-neutral-50 text-neutral-600 border-neutral-200 text-xs">{b.equipmentType}</Badge>
+                </TableCell>
+                <TableCell className="hidden md:table-cell text-xs text-neutral-700">{b.teuBooked}</TableCell>
+                <TableCell className="hidden lg:table-cell text-xs font-medium text-neutral-900">
+                  {b.rate ? `${formatCurrency(b.rate)}` : '—'}
+                  <span className="ml-1 text-neutral-400 text-xs">{b.rateType}</span>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={
+                    b.status === 'Confirmed' ? 'bg-green-100 text-green-800 border-green-200' :
+                    b.status === 'Cancelled' ? 'bg-red-100 text-red-800 border-red-200' :
+                    b.status === 'Pending' ? 'bg-amber-100 text-amber-800 border-amber-200' :
+                    b.status === 'Rolled' ? 'bg-purple-100 text-purple-800 border-purple-200' :
+                    'bg-neutral-100 text-neutral-700 border-neutral-200'
+                  }>{b.status}</Badge>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </ScrollArea>
+    </div>
+  )
+}
+
 // ─── Main Dashboard Component ────────────────────────────────────────
 
 export default function MaritimeDashboard() {
@@ -1516,6 +1818,18 @@ export default function MaritimeDashboard() {
                 <Container className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Containers</span>
               </TabsTrigger>
+              <TabsTrigger value="carriers" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                <Handshake className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Carriers</span>
+              </TabsTrigger>
+              <TabsTrigger value="charters" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                <Gauge className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Charters</span>
+              </TabsTrigger>
+              <TabsTrigger value="bookings" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                <BookOpen className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Bookings</span>
+              </TabsTrigger>
               <TabsTrigger value="compliance" className="flex items-center gap-1.5 text-xs sm:text-sm">
                 <Shield className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Compliance</span>
@@ -1539,6 +1853,15 @@ export default function MaritimeDashboard() {
             </TabsContent>
             <TabsContent value="containers">
               <ContainersPanel />
+            </TabsContent>
+            <TabsContent value="carriers">
+              <CarriersPanel />
+            </TabsContent>
+            <TabsContent value="charters">
+              <ChartersPanel />
+            </TabsContent>
+            <TabsContent value="bookings">
+              <BookingsPanel />
             </TabsContent>
             <TabsContent value="compliance">
               <CompliancePanel />

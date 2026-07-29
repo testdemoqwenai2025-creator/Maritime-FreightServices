@@ -7,11 +7,20 @@ export async function GET(request: Request) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
     const status = searchParams.get('status')
+    const search = searchParams.get('search')
 
     const skip = (page - 1) * limit
 
     const where: Record<string, unknown> = {}
     if (status && status !== 'All') where.status = status
+    if (search) {
+      where.OR = [
+        { billOfLading: { contains: search } },
+        { shipper: { contains: search } },
+        { consignee: { contains: search } },
+        { cargoDesc: { contains: search } },
+      ]
+    }
 
     const [shipments, total] = await Promise.all([
       db.shipment.findMany({
@@ -20,7 +29,14 @@ export async function GET(request: Request) {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          vessel: { select: { name: true, mmsi: true, flagCountry: true } },
+          vessel: {
+            select: {
+              name: true, mmsi: true, flagCountry: true,
+              carrier: { select: { name: true, code: true } },
+            },
+          },
+          carrier: { select: { name: true, code: true } },
+          tradeRoute: { select: { name: true, code: true } },
           originPort: { select: { name: true, countryCode: true, unlocode: true } },
           destPort: { select: { name: true, countryCode: true, unlocode: true } },
           containers: true,
@@ -70,6 +86,8 @@ export async function POST(request: Request) {
         currency: body.currency || 'USD',
         shipper: body.shipper || null,
         consignee: body.consignee || null,
+        carrierId: body.carrierId || null,
+        tradeRouteId: body.tradeRouteId || null,
       },
     })
 
