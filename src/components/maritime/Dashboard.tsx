@@ -8,7 +8,8 @@ import {
   ChevronRight, ChevronDown, Activity, Waves, Thermometer,
   Shield, AlertTriangle, FileText, Truck, Gauge, Fuel, Wrench,
   Users, Building, Warehouse, Snowflake, Radio, Flame,
-  Plane, Handshake, BookOpen, Route, Download, Search, Moon, Sun, Leaf, Bell
+  Plane, Handshake, BookOpen, Route, Download, Search, Moon, Sun, Leaf, Bell,
+  GitBranch
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -21,6 +22,7 @@ import { ExportButtons } from './DataExport'
 import CommandPalette from './CommandPalette'
 import NotificationCenter from './NotificationCenter'
 const VoyageAnalyticsPanel = dynamic(() => import('./VoyageAnalyticsPanel'), { ssr: false })
+const StateMachinePanel = dynamic(() => import('./StateMachinePanel'), { ssr: false })
 
 // Dynamic import for VesselMap (leaflet needs window/DOM)
 const VesselMap = dynamic(() => import('./VesselMap'), { ssr: false, loading: () => <div className="flex h-[500px] items-center justify-center rounded-lg bg-muted"><div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-foreground" /></div> })
@@ -1986,6 +1988,10 @@ export default function MaritimeDashboard() {
                 <Bell className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Alerts</span>
               </TabsTrigger>
+              <TabsTrigger value="state-machine" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                <GitBranch className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">State Machine</span>
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview">
@@ -2032,6 +2038,9 @@ export default function MaritimeDashboard() {
             </TabsContent>
             <TabsContent value="alerts">
               <NotificationCenter expanded />
+            </TabsContent>
+            <TabsContent value="state-machine">
+              <StateMachinePanel />
             </TabsContent>
           </Tabs>
         )}

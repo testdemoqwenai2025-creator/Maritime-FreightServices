@@ -1,17 +1,8 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { finalizeTrace } from '@/lib/trace-store'
 
-export async function GET(request: Request) {
-  const handlerStart = performance.now()
-  let dbDurationMs = 0
-  let dbQueryCount = 0
-  let response: NextResponse
-  let statusCode = 200
-
+export async function GET() {
   try {
-    const dbStart = performance.now()
-
     const [
       totalVessels, activeVessels, inPortVessels,
       totalPorts, totalShipments, totalContainers,
@@ -26,21 +17,25 @@ export async function GET(request: Request) {
       topCarriers, bookingStatusBreakdown,
       charterTypeBreakdown, dangerousCargoCount,
     ] = await Promise.all([
+      // Core counts
       db.vessel.count(),
       db.vessel.count({ where: { status: 'Active' } }),
       db.vessel.count({ where: { status: 'In Port' } }),
       db.port.count(),
       db.shipment.count(),
       db.container.count(),
+      // New model counts
       db.carrier.count(),
       db.charter.count(),
       db.booking.count(),
       db.cargoType.count(),
       db.tradeRoute.count(),
+      // Breakdowns
       db.shipment.groupBy({ by: ['status'], _count: { status: true } }),
       db.vessel.groupBy({ by: ['vesselType'], _count: { vesselType: true } }),
       db.vessel.groupBy({ by: ['status'], _count: { status: true } }),
       db.container.groupBy({ by: ['status'], _count: { status: true } }),
+      // Recent arrivals with enriched data
       db.vesselArrival.findMany({
         take: 10, orderBy: { arrivalAt: 'desc' },
         include: {
@@ -48,6 +43,7 @@ export async function GET(request: Request) {
           port: { select: { name: true, countryCode: true, congestionLevel: true } },
         },
       }),
+      // Trade overview
       db.tradeData.aggregate({ _sum: { tradeValueUsd: true, grossWeightKg: true, co2EmissionsT: true } }),
       db.tradeData.groupBy({ by: ['partnerCode'], _sum: { tradeValueUsd: true }, orderBy: { _sum: { tradeValueUsd: 'desc' } }, take: 10 }),
       db.tradeData.groupBy({ by: ['tradeRoute'], _sum: { tradeValueUsd: true, co2EmissionsT: true }, orderBy: { _sum: { tradeValueUsd: 'desc' } }, take: 10 }),
@@ -55,6 +51,7 @@ export async function GET(request: Request) {
       db.shipmentDocument.groupBy({ by: ['status'], _count: { status: true } }),
       db.tradeData.count(),
       db.shipmentDocument.count(),
+      // New breakdowns
       db.carrier.groupBy({ by: ['alliance'], _count: { alliance: true }, _sum: { totalTEUCapacity: true } }),
       db.carrier.aggregate({ _avg: { reliability: true, co2PerTeu: true } }),
       db.carrier.findMany({ take: 5, orderBy: { totalTEUCapacity: 'desc' }, select: { name: true, code: true, totalTEUCapacity: true, fleetSize: true, reliability: true } }),
@@ -63,10 +60,7 @@ export async function GET(request: Request) {
       db.cargoType.count({ where: { dangerous: true } }),
     ])
 
-    dbDurationMs = parseFloat((performance.now() - dbStart).toFixed(3))
-    dbQueryCount = 21 // 21 parallel queries
-
-    response = NextResponse.json({
+    return NextResponse.json({
       summary: {
         totalVessels, activeVessels, inPortVessels, totalPorts, totalShipments,
         totalContainers, totalDocuments, totalTradeRecords,
@@ -86,6 +80,7 @@ export async function GET(request: Request) {
       tradeByRoute: tradeByRoute.map((r) => ({ route: r.tradeRoute, totalValue: r._sum.tradeValueUsd || 0, co2Emissions: r._sum.co2EmissionsT || 0 })),
       congestionDistribution: congestionDistribution.map((c) => ({ level: c.congestionLevel, count: c._count.congestionLevel })),
       documentStats: documentStats.map((d) => ({ status: d.status, count: d._count.status })),
+      // New data
       allianceBreakdown: allianceBreakdown.map((a) => ({
         alliance: a.alliance,
         count: a._count.alliance,
@@ -101,16 +96,7 @@ export async function GET(request: Request) {
       dangerousCargoCount,
     })
   } catch (error) {
-    statusCode = 500
     console.error('Error fetching dashboard data:', error)
-    response = NextResponse.json({ error: 'Failed to fetch dashboard data' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to fetch dashboard data' }, { status: 500 })
   }
-
-  // Inject trace timing into response headers
-  response.headers.set('x-handler-duration-ms', parseFloat((performance.now() - handlerStart).toFixed(3)).toString())
-  response.headers.set('x-db-duration-ms', dbDurationMs.toString())
-  response.headers.set('x-db-queries', dbQueryCount.toString())
-
-  finalizeTrace(request, response, { dbQueryCount, dbDurationMs, handlerStartPerf: handlerStart })
-  return response
 }

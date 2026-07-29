@@ -1,23 +1,18 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { finalizeTrace } from '@/lib/trace-store'
 
 const startTime = Date.now()
 
-export async function GET(request: Request) {
-  const handlerStart = performance.now()
+export async function GET() {
   const mem = process.memoryUsage()
-  let dbDurationMs = 0
-  let dbQueryCount = 0
-  let response: NextResponse
+  const start = performance.now()
 
   try {
-    const dbStart = performance.now()
     await db.port.count()
-    dbDurationMs = parseFloat((performance.now() - dbStart).toFixed(3))
-    dbQueryCount = 1
 
-    response = NextResponse.json({
+    const dbTime = performance.now() - start
+
+    return NextResponse.json({
       status: 'healthy',
       uptime: Math.floor((Date.now() - startTime) / 1000),
       uptimeHuman: formatUptime(Date.now() - startTime),
@@ -28,7 +23,7 @@ export async function GET(request: Request) {
       },
       database: {
         status: 'connected',
-        responseTime: `${dbDurationMs}ms`,
+        responseTime: `${dbTime.toFixed(1)}ms`,
       },
       runtime: {
         node: process.version,
@@ -37,7 +32,7 @@ export async function GET(request: Request) {
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
-    response = NextResponse.json(
+    return NextResponse.json(
       {
         status: 'degraded',
         database: { status: 'disconnected', error: String(error) },
@@ -47,13 +42,6 @@ export async function GET(request: Request) {
       { status: 503 }
     )
   }
-
-  response.headers.set('x-handler-duration-ms', parseFloat((performance.now() - handlerStart).toFixed(3)).toString())
-  response.headers.set('x-db-duration-ms', dbDurationMs.toString())
-  response.headers.set('x-db-queries', dbQueryCount.toString())
-
-  finalizeTrace(request, response, { dbQueryCount, dbDurationMs, handlerStartPerf: handlerStart })
-  return response
 }
 
 function formatUptime(ms: number): string {

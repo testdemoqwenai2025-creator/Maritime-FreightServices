@@ -307,19 +307,29 @@ model ShipmentDocument {
 }
 
 model ShipmentEvent {
-  id          String   @id @default(cuid())
-  shipmentId  String
-  eventType   String // Booked, CustomsFiled, GateIn, Loaded, Departed, AtSea, Arrived, Discharging, GateOut, Delivered, Exception, Held, Released
-  eventDesc   String?
-  location    String?
-  countryCode String?
-  latitude    Float?
-  longitude   Float?
-  vesselName  String?
-  performedBy String?
-  createdAt   DateTime @default(now())
+  id              String   @id @default(cuid())
+  shipmentId      String
+  sequence        Int      @default(0) // Event ordering within the shipment (Leap 2: Event Sourcing)
+  eventType       String // Booked, CustomsFiled, CustomsCleared, CustomsHeld, CustomsReleased, CustomsRejected, GateIn, Loaded, Departed, AtSea, Approaching, Arrived, Discharging, DischargeComplete, GateOut, Delivered, Exception, ExceptionResolved, Cancelled, Archived
+  previousState   String?  @default("Booked") // State before this event (Leap 2)
+  computedState   String?  @default("Booked") // State after this event (Leap 2)
+  eventDesc       String?
+  location        String?
+  countryCode     String?
+  latitude        Float?
+  longitude       Float?
+  vesselName      String?
+  performedBy     String?  // Who triggered this event (Leap 2: actor)
+  actor           String?  @default("system") // system | user | automated | customs | carrier | terminal (Leap 2)
+  metadata        String?  // JSON payload for additional context (Leap 2)
+  isValid         Boolean  @default(true) // Whether the transition was valid per statechart (Leap 1)
+  createdAt       DateTime @default(now())
 
   shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId, sequence])
+  @@index([shipmentId, eventType])
+  @@index([computedState])
 }
 
 model VesselArrival {

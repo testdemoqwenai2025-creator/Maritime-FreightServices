@@ -45,3 +45,28 @@ Stage Summary:
 - GitHub push successful: c38cb7e..e992349 main->main
 - Phase 2 complete: search, health, about page, SKILLS.md
 - Total routes: 21 (3 pages + 18 API endpoints)
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Phase 5 — Event-Sourced Hierarchical State Machine (Leap 1-3) + Documentation + SKILLS.md + README.md
+
+Work Log:
+- Wrote strategic architecture documentation (docs/architecture/evolution-strategy.md) — 6 sections covering state machine problem, 3-leap evolution, component value assessment, decades-proof principles, and 5-horizon roadmap
+- Leap 1: Built formal hierarchical statechart for Shipment lifecycle — 18 nested states, 26 guarded transitions, 3 parallel regions (customs, documentation, financial)
+- Leap 2: Built event sourcing layer — enhanced ShipmentEvent model with sequence/previousState/computedState/actor/metadata/isValid fields, state projection engine, time-travel replay queries, immutable event append endpoint
+- Leap 3: Built probabilistic state machine — transition probability matrix from industry baseline, Monte Carlo state distribution (N=1000), Shannon entropy measurement, KL divergence drift detection, risk factor adjustments
+- Created 8 new API endpoints: statechart definition, transitions, probabilities, drift detection, event append, state projection, history timeline, time-travel replay
+- Built State Machine Visualizer panel in Dashboard with 4 tabs: Statechart tree + transition inspector, probability visualization, shipment event log, drift detection analysis
+- Updated SKILLS.md with Phase 5 details, all new endpoints, updated model descriptions
+- Updated README.md with comprehensive project overview
+- Ran event backfill script to migrate 640 existing events with new fields
+- Committed as 1f80c5c (21 files, 3415 insertions)
+- GitHub push pending (auth issue in sandbox)
+
+Stage Summary:
+- State Machine Engine: src/lib/state-machine/ (types.ts, engine.ts, probabilistic.ts, shipment-statechart.ts, index.ts)
+- 8 new API routes: /api/state-machine/* (4 endpoints) + /api/shipments/[id]/* (4 endpoints)
+- StateMachinePanel.tsx: 710-line interactive visualizer with state inspection, probability bars, event timeline, drift analysis
+- docs/architecture/evolution-strategy.md: Strategic vision document for platform evolution
+- Prisma schema: Enhanced ShipmentEvent with 6 new fields and 3 new indexes

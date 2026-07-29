@@ -1,13 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { finalizeTrace } from '@/lib/trace-store'
 
 export async function GET(request: Request) {
-  const handlerStart = performance.now()
-  let dbDurationMs = 0
-  let dbQueryCount = 0
-  let response: NextResponse
-
   try {
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
@@ -28,7 +22,6 @@ export async function GET(request: Request) {
       ]
     }
 
-    const dbStart = performance.now()
     const [shipments, total] = await Promise.all([
       db.shipment.findMany({
         where,
@@ -51,36 +44,26 @@ export async function GET(request: Request) {
       }),
       db.shipment.count({ where }),
     ])
-    dbDurationMs = parseFloat((performance.now() - dbStart).toFixed(3))
-    dbQueryCount = 2
 
-    response = NextResponse.json({
+    return NextResponse.json({
       data: shipments,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     })
   } catch (error) {
     console.error('Error fetching shipments:', error)
-    response = NextResponse.json({ error: 'Failed to fetch shipments' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to fetch shipments' }, { status: 500 })
   }
-
-  response.headers.set('x-handler-duration-ms', parseFloat((performance.now() - handlerStart).toFixed(3)).toString())
-  response.headers.set('x-db-duration-ms', dbDurationMs.toString())
-  response.headers.set('x-db-queries', dbQueryCount.toString())
-
-  finalizeTrace(request, response, { dbQueryCount, dbDurationMs, handlerStartPerf: handlerStart })
-  return response
 }
 
 export async function POST(request: Request) {
-  const handlerStart = performance.now()
-  let dbDurationMs = 0
-  let dbQueryCount = 0
-  let response: NextResponse
-
   try {
     const body = await request.json()
 
-    const dbStart = performance.now()
     const shipment = await db.shipment.create({
       data: {
         billOfLading: body.billOfLading || null,
@@ -107,19 +90,10 @@ export async function POST(request: Request) {
         tradeRouteId: body.tradeRouteId || null,
       },
     })
-    dbDurationMs = parseFloat((performance.now() - dbStart).toFixed(3))
-    dbQueryCount = 1
 
-    response = NextResponse.json(shipment, { status: 201 })
+    return NextResponse.json(shipment, { status: 201 })
   } catch (error) {
     console.error('Error creating shipment:', error)
-    response = NextResponse.json({ error: 'Failed to create shipment' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to create shipment' }, { status: 500 })
   }
-
-  response.headers.set('x-handler-duration-ms', parseFloat((performance.now() - handlerStart).toFixed(3)).toString())
-  response.headers.set('x-db-duration-ms', dbDurationMs.toString())
-  response.headers.set('x-db-queries', dbQueryCount.toString())
-
-  finalizeTrace(request, response, { dbQueryCount, dbDurationMs, handlerStartPerf: handlerStart })
-  return response
 }
