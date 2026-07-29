@@ -22,3 +22,26 @@ Stage Summary:
 - Map: CartoDB dark tiles, animated vessel markers, dark popups
 - Search: Global search input in header with ⌘K shortcut hint
 - Build: All 18 routes compile cleanly including /api/vessels/stream
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Fix 404 frontend endpoint, build Phase 2 features, push to GitHub
+
+Work Log:
+- Diagnosed 404: Next.js production server was not running on port 3000
+- Rebuilt standalone production build (previous build was stale)
+- Optimized server with --max-old-space-size=256 for K8s containerized environment
+- Created GET /api/search?q=term&type=all — unified full-text search (vessels, ports, shipments, carriers)
+- Created GET /api/health — server diagnostics endpoint (uptime, memory, DB connectivity)
+- Created GET /about — polished platform overview page with live stats, API reference, tech stack badges, 3-phase roadmap
+- Created comprehensive SKILLS.md with 6-phase evolution roadmap
+- Fixed search route bugs: cargoDescription→cargoDesc, undefined query in catch block
+- Fixed about page: Bell icon not exported from lucide-react, replaced with Radio
+- Committed and pushed to GitHub (e992349)
+
+Stage Summary:
+- Server running on port 3000, all 21 routes verified (HTTP 200)
+- GitHub push successful: c38cb7e..e992349 main->main
+- Phase 2 complete: search, health, about page, SKILLS.md
+- Total routes: 21 (3 pages + 18 API endpoints)
