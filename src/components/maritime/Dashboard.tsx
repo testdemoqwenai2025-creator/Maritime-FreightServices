@@ -1900,6 +1900,12 @@ export default function MaritimeDashboard() {
             </kbd>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" asChild className="hidden sm:inline-flex">
+              <a href="/operations" className="flex items-center gap-1.5 text-xs">
+                <Radio className="h-3 w-3 text-green-400" />
+                Live Ops
+              </a>
+            </Button>
             <Badge variant="outline" className="hidden gap-1 bg-green-500/10 text-green-400 border-green-500/30 sm:flex">
               <Activity className="h-3 w-3" />
               Live

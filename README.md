@@ -1,5 +1,9 @@
 # Global Maritime and Freight Analytics Platform
 
+> **Live Operations Center** — Monitor all platform subsystems in real-time: [https://preview-ghpc.space-z.ai/operations](https://preview-ghpc.space-z.ai/operations)
+
+> **Main Dashboard** — Full analytics dashboard with 16 tabs: [https://preview-ghpc.space-z.ai](https://preview-ghpc.space-z.ai)
+
 An open-source analytics platform designed to ingest, process, and map global maritime traffic and cargo distribution data using freely accessible public endpoints. Built with Next.js 16, TypeScript, Prisma ORM, and shadcn/ui, this platform is evolving into the definitive open-source operating system for global maritime logistics.
 
 ## Strategic Vision 2025-2035
@@ -20,9 +24,11 @@ See [docs/STRATEGIC-EVOLUTION-2025-2035.md](docs/STRATEGIC-EVOLUTION-2025-2035.m
 
 ### Current State
 
-- **Presentation Layer**: Next.js 16 web dashboard with real-time vessel tracking, shipment management, port operations, trade analytics, ESG monitoring, and AI predictive endpoints. Built with shadcn/ui components and Tailwind CSS 4.
-- **API Layer**: RESTful API routes for vessels, ports, shipments, trade data, and dashboard aggregation. 23 endpoints across 12 categories with OpenAPI 3.0 specification.
+- **Presentation Layer**: Next.js 16 web dashboard with real-time vessel tracking, shipment management, port operations, trade analytics, ESG monitoring, AI predictive endpoints, and a unified Live Operations Center. Built with shadcn/ui components and Tailwind CSS 4.
+- **API Layer**: RESTful API routes for vessels, ports, shipments, trade data, dashboard aggregation, and systems health monitoring. 28 endpoints across 14 categories with OpenAPI 3.0 specification.
+- **State Machine Layer**: Event-sourced hierarchical state machine with Monte Carlo probabilistic transitions and KL divergence drift detection (3-leap architecture).
 - **AI Layer**: Predictive ETA, anomaly detection, route optimisation, demand forecasting, and automated alerts.
+- **Middleware Layer**: CORS protection, security headers, request tracking (X-Request-ID), cache control, and API versioning.
 - **Storage Layer**: SQLite database (development) with Prisma ORM. Production path: PostgreSQL with PostGIS, TimescaleDB, ClickHouse.
 - **Data Pipeline Layer**: Python scripts for ingesting data from public maritime APIs (AISHub, UN Comtrade, NGA World Port Index).
 
@@ -86,7 +92,7 @@ See [docs/STRATEGIC-EVOLUTION-2025-2035.md](docs/STRATEGIC-EVOLUTION-2025-2035.m
 
 ## Dashboard Features
 
-The platform includes a comprehensive dark-mode dashboard with 15 interactive tabs:
+The platform includes a comprehensive dark-mode dashboard with 16 interactive tabs:
 
 | Tab | Description |
 |-----|-------------|
@@ -105,8 +111,47 @@ The platform includes a comprehensive dark-mode dashboard with 15 interactive ta
 | **ESG** | Carbon Intensity Indicator gauge, CO2 breakdown, emissions tracking |
 | **Voyage** | Voyage analytics with route performance and transit times |
 | **Alerts** | Notification center with event alerts and AI predictions |
+| **State Machine** | Event-sourced state engine with probability simulation and drift detection |
 
-**Additional features**: Command palette (Ctrl+K), Excel export with formatted styling, full-text search across all entities, interactive API documentation with try-it capability.
+**Additional features**: Command palette (Ctrl+K), Excel export with formatted styling, full-text search across all entities, interactive API documentation with try-it capability, Live Ops navigation link.
+
+## Live Operations Center
+
+The `/operations` endpoint is a dedicated real-time monitoring page that dynamically communicates with **all** platform components:
+
+| Subsystem | What It Monitors |
+|:---|:---|
+| **Database** | Record counts, query latency, connection status |
+| **State Machine Engine** | Statechart health, Monte Carlo entropy, transition count |
+| **AI Predictive Layer** | ETA prediction, anomaly detection, route optimisation, forecasting, alerts |
+| **API Layer** | 28 endpoints, protocol, specification |
+| **Event Sourcing Layer** | Immutable event log, valid/invalid event counts, recent events |
+| **Middleware Layer** | CORS, security headers, request tracking, cache control |
+
+Features auto-refresh every 30 seconds, system health indicators, live shipment data, trade analytics, and AI prediction results. Access it 24/7 at the preview URL above.
+
+## Event-Sourced State Machine (Phase 5)
+
+The platform implements a 3-leap progressive state machine architecture for shipment lifecycle management:
+
+| Leap | Capability | Technical Detail |
+|:---|:---|:---|
+| **Leap 1** | Formal Typed Statecharts | 18 hierarchical states, 28 transitions, 3 parallel regions (customs, documentation, financial) |
+| **Leap 2** | Event Sourcing | Immutable append-only event log, state projection, time-travel replay |
+| **Leap 3** | Probabilistic Transitions | Monte Carlo simulation (N=1000), Shannon entropy, KL divergence drift detection |
+
+### State Machine API Endpoints
+
+| Endpoint | Method | Description |
+|:---|:---|:---|
+| `/api/state-machine/definition` | GET | Full statechart definition (states, transitions, parallel regions) |
+| `/api/state-machine/transitions?state=X` | GET | Available transitions from a given state |
+| `/api/state-machine/probabilities?state=X` | GET | Transition probabilities and Monte Carlo state distribution |
+| `/api/state-machine/drift?expected=X&observed=Y` | GET | KL divergence drift detection with severity grading |
+| `/api/shipments/[id]/events` | GET/POST | Event list and append (validates against statechart) |
+| `/api/shipments/[id]/state` | GET | Projected state from event log with transitions and probabilities |
+| `/api/shipments/[id]/history` | GET | Full event timeline with state durations |
+| `/api/shipments/[id]/replay` | GET | Time-travel query (state at a specific timestamp) |
 
 ## Quick Start Guide
 
@@ -198,6 +243,7 @@ python scripts/un_comtrade_pipeline.py --estimate 50000000 --hs 2601
 | :--- | :--- | :--- |
 | `/api` | GET | API heartbeat |
 | `/api/health` | GET | Server health check (uptime, memory, DB status) |
+| `/api/systems` | GET | Unified systems health — all 6 subsystems (DB, State Machine, AI, API, Events, Middleware) |
 | `/api/docs` | GET | OpenAPI 3.0 specification |
 | `/api/dashboard` | GET | Aggregated dashboard metrics |
 | `/api/search` | GET | Unified full-text search across all entities |
@@ -205,6 +251,10 @@ python scripts/un_comtrade_pipeline.py --estimate 50000000 --hs 2601
 | `/api/vessels/stream` | GET | SSE real-time vessel position streaming |
 | `/api/ports` | GET | List ports with filtering |
 | `/api/shipments` | GET | List shipments with vessel and port details |
+| `/api/shipments/[id]/events` | GET/POST | Event-sourced event log (append + list) |
+| `/api/shipments/[id]/state` | GET | Projected state with transitions and probabilities |
+| `/api/shipments/[id]/history` | GET | Full event timeline with state durations |
+| `/api/shipments/[id]/replay` | GET | Time-travel query (state at timestamp) |
 | `/api/containers` | GET | List containers with filtering |
 | `/api/documents` | GET | List shipping documents |
 | `/api/events` | GET | List supply chain events |
@@ -214,6 +264,10 @@ python scripts/un_comtrade_pipeline.py --estimate 50000000 --hs 2601
 | `/api/charters` | GET | List charter agreements |
 | `/api/bookings` | GET | List freight bookings |
 | `/api/trade-data` | GET | Trade statistics and flow data |
+| `/api/state-machine/definition` | GET | Full statechart definition |
+| `/api/state-machine/transitions` | GET | Available transitions from a state |
+| `/api/state-machine/probabilities` | GET | Transition probabilities + Monte Carlo distribution |
+| `/api/state-machine/drift` | GET | KL divergence drift detection |
 | `/api/ai/eta` | GET | AI predictive ETA |
 | `/api/ai/anomaly` | GET | Vessel behaviour anomaly detection |
 | `/api/ai/routes` | GET | AI route optimisation |
