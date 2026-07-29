@@ -8,7 +8,7 @@ import {
   ChevronRight, ChevronDown, Activity, Waves, Thermometer,
   Shield, AlertTriangle, FileText, Truck, Gauge, Fuel, Wrench,
   Users, Building, Warehouse, Snowflake, Radio, Flame,
-  Plane, Handshake, BookOpen, Route, Download, Search, Moon, Sun
+  Plane, Handshake, BookOpen, Route, Download, Search, Moon, Sun, Leaf, Bell
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -16,7 +16,11 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import dynamic from 'next/dynamic'
 import AnalyticsCharts from './AnalyticsCharts'
+import ESGPanel from './ESGPanel'
 import { ExportButtons } from './DataExport'
+import CommandPalette from './CommandPalette'
+import NotificationCenter from './NotificationCenter'
+const VoyageAnalyticsPanel = dynamic(() => import('./VoyageAnalyticsPanel'), { ssr: false })
 
 // Dynamic import for VesselMap (leaflet needs window/DOM)
 const VesselMap = dynamic(() => import('./VesselMap'), { ssr: false, loading: () => <div className="flex h-[500px] items-center justify-center rounded-lg bg-muted"><div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-foreground" /></div> })
@@ -1847,6 +1851,7 @@ export default function MaritimeDashboard() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [loading, setLoading] = useState(true)
+  const [commandOpen, setCommandOpen] = useState(false)
   const { theme, setTheme } = useTheme()
   const darkMode = theme === 'dark'
 
@@ -1877,11 +1882,14 @@ export default function MaritimeDashboard() {
           <div className="relative hidden md:block">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
+              readOnly
               placeholder="Search vessels, ports, shipments..."
-              className="h-8 w-64 bg-muted border-border pl-8 text-xs text-foreground placeholder:text-muted-foreground/50"
+              className="h-8 w-64 bg-muted border-border pl-8 text-xs text-foreground placeholder:text-muted-foreground/50 cursor-pointer"
+              onClick={() => setCommandOpen(true)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                  setActiveTab('map')
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setCommandOpen(true)
                 }
               }}
             />
@@ -1898,6 +1906,7 @@ export default function MaritimeDashboard() {
               <Waves className="mr-1 h-3 w-3" />
               {dashboardData ? formatNumber(dashboardData.summary.activeVessels) : '—'} Active
             </Badge>
+            <NotificationCenter />
             <Button
               variant="ghost"
               size="icon"
@@ -1965,6 +1974,18 @@ export default function MaritimeDashboard() {
                 <Shield className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Compliance</span>
               </TabsTrigger>
+              <TabsTrigger value="esg" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                <Leaf className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">ESG</span>
+              </TabsTrigger>
+              <TabsTrigger value="voyage" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                <Navigation className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Voyage</span>
+              </TabsTrigger>
+              <TabsTrigger value="alerts" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                <Bell className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Alerts</span>
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview">
@@ -2003,9 +2024,24 @@ export default function MaritimeDashboard() {
             <TabsContent value="compliance">
               <CompliancePanel />
             </TabsContent>
+            <TabsContent value="esg">
+              <ESGPanel />
+            </TabsContent>
+            <TabsContent value="voyage">
+              <VoyageAnalyticsPanel />
+            </TabsContent>
+            <TabsContent value="alerts">
+              <NotificationCenter expanded />
+            </TabsContent>
           </Tabs>
         )}
       </main>
+
+      <CommandPalette
+        open={commandOpen}
+        onOpenChange={setCommandOpen}
+        onNavigate={(tab) => setActiveTab(tab)}
+      />
 
       {/* Footer */}
       <footer className="mt-auto border-t border-border bg-card">
