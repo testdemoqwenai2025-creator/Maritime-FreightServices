@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
         originRegion: route.originRegion,
         destRegion: route.destRegion,
         distance: `${distance.toLocaleString()} nm`,
-        typicalTransitDaysDays,
+        typicalTransitDays,
         congestionDelay: `${congestionDelay} days`,
         destCongestionLevel: destCongestion,
         reliability: `${reliability}%`,
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
       insights: {
         bestReliability: optimizations[0]?.routeName || 'N/A',
         avgTransit: optimizations.length > 0
-          ? Math.round(optimizations.reduce((a, r) => a + r.typicalTransitDaysDays, 0) / optimizations.length)
+          ? Math.round(optimizations.reduce((a, r) => a + r.typicalTransitDays, 0) / optimizations.length)
           : 0,
         avgCongestionDelay: optimizations.length > 0
           ? Math.round(optimizations.reduce((a, r) => a + parseInt(r.congestionDelay), 0) / optimizations.length)
