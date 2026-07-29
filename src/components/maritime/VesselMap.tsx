@@ -43,35 +43,35 @@ interface VesselMapProps {
 
 function vesselTypeColor(type: string): string {
   switch (type) {
-    case 'Container Ship': return '#3b82f6'  // blue
-    case 'Oil Tanker': return '#ef4444'     // red
-    case 'Bulk Carrier': return '#f59e0b'   // amber
-    case 'LNG Tanker': return '#10b981'     // green
-    case 'Ro-Ro': return '#8b5cf6'          // purple
-    case 'General Cargo': return '#6b7280'  // gray
-    case 'Vehicle Carrier': return '#ec4899' // pink
-    default: return '#6b7280'
+    case 'Container Ship': return '#60a5fa'  // blue-400
+    case 'Oil Tanker': return '#f87171'     // red-400
+    case 'Bulk Carrier': return '#fbbf24'   // amber-400
+    case 'LNG Tanker': return '#34d399'     // emerald-400
+    case 'Ro-Ro': return '#a78bfa'          // violet-400
+    case 'General Cargo': return '#9ca3af'  // gray-400
+    case 'Vehicle Carrier': return '#f472b6' // pink-400
+    default: return '#9ca3af'
   }
 }
 
 function statusColor(status: string): string {
   switch (status) {
-    case 'Active': return '#22c55e'
-    case 'In Port': return '#3b82f6'
-    case 'At Anchor': return '#f59e0b'
-    case 'Moored': return '#3b82f6'
-    case 'Underway': return '#22c55e'
-    default: return '#6b7280'
+    case 'Active': return '#4ade80'
+    case 'In Port': return '#60a5fa'
+    case 'At Anchor': return '#fbbf24'
+    case 'Moored': return '#60a5fa'
+    case 'Underway': return '#4ade80'
+    default: return '#9ca3af'
   }
 }
 
 function congestionColorHex(level: string): string {
   switch (level) {
-    case 'Low': return '#22c55e'
-    case 'Medium': return '#f59e0b'
-    case 'High': return '#f97316'
-    case 'Critical': return '#ef4444'
-    default: return '#6b7280'
+    case 'Low': return '#4ade80'
+    case 'Medium': return '#fbbf24'
+    case 'High': return '#fb923c'
+    case 'Critical': return '#f87171'
+    default: return '#9ca3af'
   }
 }
 
@@ -146,7 +146,7 @@ export default function VesselMap({ vessels, ports, onVesselClick }: VesselMapPr
     const rotation = vessel.heading || 0
     const svg = `<svg width="${size + 4}" height="${size + 4}" viewBox="0 0 ${size + 4} ${size + 4}" xmlns="http://www.w3.org/2000/svg">
       <g transform="translate(${(size + 4) / 2}, ${(size + 4) / 2}) rotate(${rotation})">
-        <polygon points="0,${-size / 2} ${size / 3},${size / 2} ${-size / 3},${size / 2}" fill="${color}" stroke="#fff" stroke-width="1" opacity="0.9"/>
+        <polygon points="0,${-size / 2} ${size / 3},${size / 2} ${-size / 3},${size / 2}" fill="${color}" stroke="rgba(255,255,255,0.8)" stroke-width="1" opacity="0.9"/>
       </g>
     </svg>`
 
@@ -168,7 +168,7 @@ export default function VesselMap({ vessels, ports, onVesselClick }: VesselMapPr
     const size = port.annualTEU > 5000000 ? 14 : port.annualTEU > 1000000 ? 10 : 7
 
     const svg = `<svg width="${size + 6}" height="${size + 6}" viewBox="0 0 ${size + 6} ${size + 6}" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="${(size + 6) / 2}" cy="${(size + 6) / 2}" r="${size / 2 + 1}" fill="${color}" stroke="#fff" stroke-width="1.5" opacity="0.85"/>
+      <circle cx="${(size + 6) / 2}" cy="${(size + 6) / 2}" r="${size / 2 + 1}" fill="${color}" stroke="rgba(255,255,255,0.7)" stroke-width="1.5" opacity="0.85"/>
     </svg>`
 
     return L.divIcon({
@@ -196,15 +196,15 @@ export default function VesselMap({ vessels, ports, onVesselClick }: VesselMapPr
       const marker = L.marker([v.latitude, v.longitude], { icon })
       marker.bindPopup(`
         <div style="font-family: system-ui; font-size: 12px; min-width: 180px;">
-          <div style="font-weight: 600; font-size: 13px; margin-bottom: 4px;">${v.name}</div>
-          <div style="color: #888; margin-bottom: 6px;">${v.carrier?.name || ''} ${v.carrier?.code ? '(' + v.carrier.code + ')' : ''}</div>
+          <div style="font-weight: 600; font-size: 13px; margin-bottom: 4px; color: #e8e8f0;">${v.name}</div>
+          <div style="color: #8888aa; margin-bottom: 6px;">${v.carrier?.name || ''} ${v.carrier?.code ? '(' + v.carrier.code + ')' : ''}</div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; font-size: 11px;">
-            <span style="color: #888;">Type:</span><span>${v.vesselType}</span>
-            <span style="color: #888;">Flag:</span><span>${v.flagCountry || '—'}</span>
-            <span style="color: #888;">Speed:</span><span>${v.speed?.toFixed(1) || '0'} kn</span>
-            <span style="color: #888;">HDG:</span><span>${v.heading || '—'}°</span>
-            <span style="color: #888;">Status:</span><span>${v.status}</span>
-            <span style="color: #888;">Dest:</span><span>${v.destination || '—'}</span>
+            <span style="color: #8888aa;">Type:</span><span style="color: #d0d0e0;">${v.vesselType}</span>
+            <span style="color: #8888aa;">Flag:</span><span style="color: #d0d0e0;">${v.flagCountry || '—'}</span>
+            <span style="color: #8888aa;">Speed:</span><span style="color: #d0d0e0;">${v.speed?.toFixed(1) || '0'} kn</span>
+            <span style="color: #8888aa;">HDG:</span><span style="color: #d0d0e0;">${v.heading || '—'}°</span>
+            <span style="color: #8888aa;">Status:</span><span style="color: ${statusColor(v.status)}">${v.status}</span>
+            <span style="color: #8888aa;">Dest:</span><span style="color: #d0d0e0;">${v.destination || '—'}</span>
           </div>
         </div>
       `, { className: 'dark-popup' })
@@ -230,11 +230,11 @@ export default function VesselMap({ vessels, ports, onVesselClick }: VesselMapPr
       const marker = L.marker([p.latitude, p.longitude], { icon })
       marker.bindPopup(`
         <div style="font-family: system-ui; font-size: 12px; min-width: 160px;">
-          <div style="font-weight: 600; font-size: 13px;">⚓ ${p.name}</div>
-          <div style="color: #888; margin-bottom: 4px;">${p.unlocode || ''} · ${p.countryCode}</div>
+          <div style="font-weight: 600; font-size: 13px; color: #e8e8f0;">⚓ ${p.name}</div>
+          <div style="color: #8888aa; margin-bottom: 4px;">${p.unlocode || ''} · ${p.countryCode}</div>
           <div style="font-size: 11px;">
-            <span style="color: #888;">TEU:</span> ${p.annualTEU?.toLocaleString() || '—'}
-            <br/><span style="color: #888;">Congestion:</span> <span style="color: ${congestionColorHex(p.congestionLevel)}">${p.congestionLevel}</span>
+            <span style="color: #8888aa;">TEU:</span> <span style="color: #d0d0e0;">${p.annualTEU?.toLocaleString() || '—'}</span>
+            <br/><span style="color: #8888aa;">Congestion:</span> <span style="color: ${congestionColorHex(p.congestionLevel)}; font-weight: 500;">${p.congestionLevel}</span>
           </div>
         </div>
       `, { className: 'dark-popup' })
@@ -244,32 +244,32 @@ export default function VesselMap({ vessels, ports, onVesselClick }: VesselMapPr
   }, [ports, createPortIcon])
 
   return (
-    <Card className="border-neutral-200 overflow-hidden">
+    <Card className="border-border overflow-hidden bg-card">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-base font-semibold text-neutral-900">
+          <CardTitle className="flex items-center gap-2 text-base font-semibold text-foreground">
             <Ship className="h-4 w-4" />
             Global Vessel Tracker
           </CardTitle>
-          <div className="flex items-center gap-3 text-xs text-neutral-500">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <div className="flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
+              <span className="inline-block h-2 w-2 rounded-full bg-blue-400" />
               Container
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
+              <span className="inline-block h-2 w-2 rounded-full bg-red-400" />
               Tanker
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+              <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
               Bulk
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
               LNG
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded-full border-2 border-white" />
+              <span className="inline-block h-3 w-3 rounded-full border-2 border-white/50" />
               Port
             </div>
           </div>

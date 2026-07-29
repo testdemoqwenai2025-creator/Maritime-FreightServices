@@ -66,7 +66,7 @@ export function ExportButtons({ data, filename, formats = ['csv', 'json'] }: Exp
         <Button
           variant="outline"
           size="sm"
-          className="gap-1.5 text-xs border-neutral-200 hover:bg-neutral-50"
+          className="gap-1.5 text-xs border-border hover:bg-muted"
           onClick={() => exportToCSV(data, filename)}
         >
           <FileSpreadsheet className="h-3.5 w-3.5" />
@@ -77,7 +77,7 @@ export function ExportButtons({ data, filename, formats = ['csv', 'json'] }: Exp
         <Button
           variant="outline"
           size="sm"
-          className="gap-1.5 text-xs border-neutral-200 hover:bg-neutral-50"
+          className="gap-1.5 text-xs border-border hover:bg-muted"
           onClick={() => exportToJSON(data, filename)}
         >
           <FileText className="h-3.5 w-3.5" />

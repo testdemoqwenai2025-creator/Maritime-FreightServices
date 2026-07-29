@@ -1,20 +1,24 @@
 ---
 Task ID: 1
-Agent: Super Z (Main)
-Task: Build Global Maritime & Freight Analytics Platform
+Agent: Main Agent
+Task: Dark mode + real-time improvements for Maritime Analytics Platform
 
 Work Log:
-- Initialized Next.js 16 fullstack development environment
-- Designed Prisma schema with 8 maritime domain models (Port, Vessel, Shipment, Container, TradeData, User, VesselArrival, VesselDeparture)
-- Pushed schema to SQLite database and generated Prisma client
-- Created RESTful API routes: /api/dashboard, /api/vessels, /api/ports, /api/shipments, /api/trade-data
-- Built maritime dashboard UI with 4 tabs: Overview (KPI cards, shipment pipeline, fleet composition, recent arrivals), Shipments, Vessels, Trade
-- Seeded database with 25 global ports, 15 vessels, 10 shipments, 71 containers, 15 trade records
-- Created Python data pipeline scripts: seed_ports.py, ais_pipeline.py, un_comtrade_pipeline.py
-- Created SKILLS.md and README.md documentation
-- Pushed all code to GitHub: testdemoqwenai2025-creator/Maritime-FreightServices
+- Explored full project structure (1959-line monolithic Dashboard.tsx, 13 Prisma models, 18 API routes)
+- Migrated all hardcoded light-mode Tailwind colors (neutral-*) to CSS variable-based dark-mode classes
+- Added next-themes ThemeProvider to layout.tsx with defaultTheme="dark"
+- Redesigned globals.css with maritime ocean-blue dark theme (oklch color space)
+- Updated VesselMap.tsx with dark popup styles, CSS animations, brighter chart colors
+- Updated AnalyticsCharts.tsx with dark-compatible axis colors, tooltips, treemap strokes
+- Updated DataExport.tsx with dark button styling
+- Added SSE endpoint at /api/vessels/stream for real-time vessel position simulation (80 vessels, 15 shipping lanes)
+- Enhanced MapPanel with SSE connection, live indicator badge, auto-reconnect
+- Added global search bar to Dashboard header with keyboard shortcut hint
+- Production build successful (18 routes, 0 errors)
 
 Stage Summary:
-- Fully functional Next.js dashboard verified via browser automation
-- GitHub repository populated: https://github.com/testdemoqwenai2025-creator/Maritime-FreightServices
-- All data pipelines documented and ready for production API key integration
+- Dark mode: Default dark with next-themes toggle, maritime-themed oklch color palette
+- Real-time: SSE endpoint simulating AIS vessel movements every 5s
+- Map: CartoDB dark tiles, animated vessel markers, dark popups
+- Search: Global search input in header with ⌘K shortcut hint
+- Build: All 18 routes compile cleanly including /api/vessels/stream
