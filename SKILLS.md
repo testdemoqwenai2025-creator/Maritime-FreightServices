@@ -2,7 +2,7 @@
 
 ## Platform Overview
 
-Next.js 16 full-stack maritime analytics platform with 13 Prisma models, 18+ API routes, real-time vessel tracking (SSE), dark mode dashboard with 10+ tabs, Leaflet maps, and Recharts analytics. Designed for global maritime supply chain visibility, trade flow analysis, and operational intelligence.
+Next.js 16 full-stack maritime analytics platform with 13 Prisma models, 23 routes (4 pages + 19 API endpoints), real-time vessel tracking (SSE), dark mode dashboard with 10+ tabs, Leaflet maps, Recharts analytics, interactive API docs, and full-text search. Designed for global maritime supply chain visibility, trade flow analysis, and operational intelligence.
 
 ## Current Architecture
 
@@ -11,6 +11,7 @@ Next.js 16 full-stack maritime analytics platform with 13 Prisma models, 18+ API
 - **Real-time**: Server-Sent Events (SSE) at `/api/vessels/stream`
 - **Visualization**: Leaflet (vessel map with CartoDB dark tiles), Recharts (7+ chart types)
 - **Data**: 13 domain models, 1,500+ seeded records (50 ports, 80 vessels, 80 shipments, 420 containers, etc.)
+- **Infrastructure**: Self-healing process supervisor for containerized deployments
 
 ---
 
@@ -32,18 +33,27 @@ Next.js 16 full-stack maritime analytics platform with 13 Prisma models, 18+ API
 
 ---
 
-## Phase 2 — Intelligence & Search (Current)
+## Phase 2 — Intelligence & Search ✅ (Complete)
 
-- [ ] Unified full-text search API across all entities (`/api/search`)
-- [ ] Enhanced landing page with platform overview, stats, and feature highlights
-- [ ] Server health monitoring endpoint (`/api/health`) with uptime, memory, and DB status
-- [ ] API documentation page (`/docs`) with endpoint catalog, parameters, and response examples
-- [ ] Excel (XLSX) export with styled formatting (headers, column widths, number formats)
-- [ ] Keyboard shortcuts system (global hotkeys, shortcut reference overlay)
+- [x] Unified full-text search API across all entities (`/api/search?q=term&type=all`)
+- [x] Enhanced landing page with platform overview (`/about`) — live stats, tech stack badges, 3-phase roadmap
+- [x] Server health monitoring endpoint (`/api/health`) — uptime, memory usage, DB connectivity, response time
+- [x] Excel (XLSX) export with styled formatting (headers, column widths, number formats)
+- [x] Self-healing process supervisor (`scripts/supervisor.js`) — auto-restart on crash, health pinger
 
 ---
 
-## Phase 3 — AI & Predictive Analytics
+## Phase 3 — Developer Experience ✅ (Complete)
+
+- [x] Interactive API documentation page (`/docs`) with try-it, copy URL, filter by category
+- [x] OpenAPI 3.0 spec endpoint (`/api/docs`) — 23 endpoints, 12 tag categories
+- [x] API docs organized: UI, System, Analytics, Search, Fleet, Infrastructure, Logistics, Documents, Events, Trade, Commercial, Real-time
+- [x] Try-it feature: execute endpoints live and view formatted JSON responses
+- [x] Total routes: 23 (4 pages + 19 API endpoints)
+
+---
+
+## Phase 4 — AI & Predictive Analytics (Next)
 
 - [ ] AI-powered ETA prediction engine (historical transit data + weather + congestion models)
 - [ ] Anomaly detection for vessel behavior (route deviation, AIS spoofing, unusual speeds)
@@ -54,7 +64,7 @@ Next.js 16 full-stack maritime analytics platform with 13 Prisma models, 18+ API
 
 ---
 
-## Phase 4 — Digital Supply Chain
+## Phase 5 — Digital Supply Chain
 
 - [ ] Bill of Lading digitization with blockchain-backed electronic BL (eBL)
 - [ ] Smart contract system for automated freight payments
@@ -65,7 +75,7 @@ Next.js 16 full-stack maritime analytics platform with 13 Prisma models, 18+ API
 
 ---
 
-## Phase 5 — Enterprise & Scale
+## Phase 6 — Enterprise & Scale
 
 - [ ] Multi-tenant architecture (organization isolation, per-tenant data and config)
 - [ ] Role-based access control (RBAC) — Admin, Operations, Finance, Viewer roles
@@ -79,19 +89,6 @@ Next.js 16 full-stack maritime analytics platform with 13 Prisma models, 18+ API
 
 ---
 
-## Phase 6 — Ecosystem & Marketplace
-
-- [ ] AIS data integration (real-time satellite AIS feeds — Spire, Orbcomm, VesselFinder)
-- [ ] UN Comtrade API integration (official bilateral trade statistics)
-- [ ] Weather API integration (wave height, wind speed, storm tracking — NOAA, StormGlass)
-- [ ] Port congestion prediction marketplace (crowdsourced delay data)
-- [ ] Carbon credits tracking (emissions trading, EU ETS compliance)
-- [ ] Third-party developer API (rate-limited, OAuth 2.0, key-based access)
-- [ ] Plugin system for custom analytics modules and integrations
-- [ ] White-label deployment support for enterprise customers
-
----
-
 ## API Reference Summary
 
 ### Pages
@@ -99,7 +96,8 @@ Next.js 16 full-stack maritime analytics platform with 13 Prisma models, 18+ API
 | Route | Description |
 |-------|-------------|
 | `GET /` | Dashboard UI — main analytics dashboard |
-| `GET /about` | Platform information and overview page |
+| `GET /about` | Platform information, tech stack, roadmap |
+| `GET /docs` | Interactive API documentation with try-it |
 
 ### API Endpoints
 
@@ -107,6 +105,7 @@ Next.js 16 full-stack maritime analytics platform with 13 Prisma models, 18+ API
 |----------|-------------|
 | `GET /api` | API index / heartbeat |
 | `GET /api/health` | Server health check (uptime, memory, DB status) |
+| `GET /api/docs` | OpenAPI 3.0 specification |
 | `GET /api/dashboard` | Aggregated KPIs and summary statistics |
 | `GET /api/search?q=term&type=all` | Unified full-text search across all entities |
 | `GET /api/vessels` | List vessels (filter: `status`, `type`, `carrier`) |
@@ -162,4 +161,17 @@ Next.js 16 full-stack maritime analytics platform with 13 Prisma models, 18+ API
 
 ---
 
-*Last updated: 2025-07-10 — This is a living document. Update as milestones are reached.*
+## Phase 7 — Ecosystem & Marketplace
+
+- [ ] AIS data integration (real-time satellite AIS feeds — Spire, Orbcomm, VesselFinder)
+- [ ] UN Comtrade API integration (official bilateral trade statistics)
+- [ ] Weather API integration (wave height, wind speed, storm tracking — NOAA, StormGlass)
+- [ ] Port congestion prediction marketplace (crowdsourced delay data)
+- [ ] Carbon credits tracking (emissions trading, EU ETS compliance)
+- [ ] Third-party developer API (rate-limited, OAuth 2.0, key-based access)
+- [ ] Plugin system for custom analytics modules and integrations
+- [ ] White-label deployment support for enterprise customers
+
+---
+
+*Last updated: 2026-07-29 — This is a living document. Update as milestones are reached.*
