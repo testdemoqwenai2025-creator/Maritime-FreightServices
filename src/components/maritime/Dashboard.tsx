@@ -7,17 +7,25 @@ import {
   ChevronRight, ChevronDown, Activity, Waves, Thermometer,
   Shield, AlertTriangle, FileText, Truck, Gauge, Fuel, Wrench,
   Users, Building, Warehouse, Snowflake, Radio, Flame,
-  Plane, Handshake, BookOpen, Route
+  Plane, Handshake, BookOpen, Route, Download, Search, Moon, Sun
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import dynamic from 'next/dynamic'
+import AnalyticsCharts from './AnalyticsCharts'
+import { ExportButtons } from './DataExport'
+
+// Dynamic import for VesselMap (leaflet needs window/DOM)
+const VesselMap = dynamic(() => import('./VesselMap'), { ssr: false, loading: () => <div className="flex h-[500px] items-center justify-center rounded-lg bg-neutral-100"><div className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-900" /></div> })
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from '@/components/ui/table'
 import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
+import { Input } from '@/components/ui/input'
 
 // ─── Shared Utilities ────────────────────────────────────────────────
 
@@ -1746,12 +1754,52 @@ function BookingsPanel() {
   )
 }
 
+// ─── Map Panel ────────────────────────────────────────────────────────
+
+function MapPanel() {
+  const [vessels, setVessels] = useState<any[]>([])
+  const [ports, setPorts] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/vessels?limit=100').then(r => r.json()),
+      fetch('/api/ports?limit=60').then(r => r.json()),
+    ])
+      .then(([v, p]) => {
+        setVessels(v.data || [])
+        setPorts(p.data || [])
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (loading) return <LoadingSpinner />
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-neutral-500">Showing {vessels.length} vessels and {ports.length} ports worldwide</p>
+        <ExportButtons data={vessels} filename="vessels" formats={['csv']} />
+      </div>
+      <VesselMap vessels={vessels} ports={ports} />
+    </div>
+  )
+}
+
+// ─── Analytics Panel ──────────────────────────────────────────────────
+
+function AnalyticsPanel({ data }: { data: DashboardData | null }) {
+  if (!data) return <LoadingSpinner />
+  return <AnalyticsCharts data={data} />
+}
+
 // ─── Main Dashboard Component ────────────────────────────────────────
 
 export default function MaritimeDashboard() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [loading, setLoading] = useState(true)
+  const [darkMode, setDarkMode] = useState(false)
 
   useEffect(() => {
     fetch('/api/dashboard')
@@ -1760,18 +1808,22 @@ export default function MaritimeDashboard() {
       .catch(() => setLoading(false))
   }, [])
 
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode)
+  }, [darkMode])
+
   return (
-    <div className="flex min-h-screen flex-col bg-neutral-50">
+    <div className={`flex min-h-screen flex-col ${darkMode ? 'bg-neutral-950' : 'bg-neutral-50'}`}>
       {/* Sticky Header */}
-      <header className="sticky top-0 z-50 border-b border-neutral-200 bg-white/95 backdrop-blur-sm">
+      <header className={`sticky top-0 z-50 border-b backdrop-blur-sm ${darkMode ? 'border-neutral-800 bg-neutral-950/95' : 'border-neutral-200 bg-white/95'}`}>
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-900">
+            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${darkMode ? 'bg-blue-600' : 'bg-neutral-900'}`}>
               <Ship className="h-4 w-4 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-neutral-900">Maritime Analytics</h1>
-              <p className="hidden text-xs text-neutral-500 sm:block">Global Maritime & Freight Platform</p>
+              <h1 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-neutral-900'}`}>Maritime Analytics</h1>
+              <p className={`hidden text-xs sm:block ${darkMode ? 'text-neutral-500' : 'text-neutral-500'}`}>Global Maritime & Freight Platform</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1779,10 +1831,18 @@ export default function MaritimeDashboard() {
               <Activity className="h-3 w-3" />
               Live
             </Badge>
-            <Badge variant="outline" className="bg-neutral-100 text-neutral-600 border-neutral-200">
+            <Badge variant="outline" className={`border-neutral-200 ${darkMode ? 'bg-neutral-800 text-neutral-300' : 'bg-neutral-100 text-neutral-600'}`}>
               <Waves className="mr-1 h-3 w-3" />
               {dashboardData ? formatNumber(dashboardData.summary.activeVessels) : '—'} Active
             </Badge>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-8 w-8 ${darkMode ? 'text-neutral-400 hover:text-yellow-400' : 'text-neutral-500 hover:text-neutral-900'}`}
+              onClick={() => setDarkMode(!darkMode)}
+            >
+              {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
           </div>
         </div>
       </header>
@@ -1793,10 +1853,18 @@ export default function MaritimeDashboard() {
           <LoadingSpinner />
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-6 flex w-full flex-wrap gap-1 bg-neutral-100">
+            <TabsList className={`mb-6 flex w-full flex-wrap gap-1 ${darkMode ? 'bg-neutral-900' : 'bg-neutral-100'}`}>
               <TabsTrigger value="overview" className="flex items-center gap-1.5 text-xs sm:text-sm">
                 <BarChart3 className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Overview</span>
+              </TabsTrigger>
+              <TabsTrigger value="map" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                <Globe className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Live Map</span>
+              </TabsTrigger>
+              <TabsTrigger value="analytics" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                <TrendingUp className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Analytics</span>
               </TabsTrigger>
               <TabsTrigger value="shipments" className="flex items-center gap-1.5 text-xs sm:text-sm">
                 <Package className="h-3.5 w-3.5" />
@@ -1838,6 +1906,12 @@ export default function MaritimeDashboard() {
 
             <TabsContent value="overview">
               <OverviewPanel data={dashboardData} />
+            </TabsContent>
+            <TabsContent value="map">
+              <MapPanel />
+            </TabsContent>
+            <TabsContent value="analytics">
+              <AnalyticsPanel data={dashboardData} />
             </TabsContent>
             <TabsContent value="shipments">
               <ShipmentsPanel />
