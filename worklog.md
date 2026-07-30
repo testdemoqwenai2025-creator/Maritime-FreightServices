@@ -123,3 +123,29 @@ Stage Summary:
 - Backend: /api/health/detailed returns 7-layer server-side diagnostics
 - Frontend: 11 API endpoints + 5 browser checks + 7-layer diagram + server diagnostics panel
 - Build: 0 errors, all routes compile cleanly
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Phase 6 Sprint 2 — Digital Supply Chain (eBL, Payments, IoT, Port Digital Twin)
+
+Work Log:
+- Assessed Sprint 1 state — fully complete (Auth, RBAC, Document Workflow, Login, seed data)
+- Added 4 Prisma models: ElectronicBillOfLading, PaymentLedger, BerthAllocation, CraneSchedule
+- Added electronicBills relation to Shipment model
+- Pushed schema to SQLite via prisma db push
+- Seeded: 6 eBLs (various statuses), 6 payments (wire/LC/smart contract), 8 berth allocations, 6 crane schedules, 4 IoT sensors with readings
+- Created 4 API endpoints: /api/ebl (GET/POST), /api/payments (GET), /api/iot/sensors (GET), /api/port-operations/berths (GET)
+- Created 4 Dashboard panels: ElectronicBLPanel, PaymentLedgerPanel, IoTTelemetryPanel, PortTwinPanel
+- Added 4 new tabs to Dashboard.tsx: eBL, Payments, IoT, Port Ops
+- Fixed build error: Crane icon not in lucide-react, replaced with Construction
+- Build: 0 errors, all routes compile (now 40+ routes)
+- Pushed to GitHub as commit 4249bce
+
+Stage Summary:
+- Preview URL: https://preview-ghpc.space-z.ai/
+- Dashboard now has 16 tabs including 4 new Sprint 2 tabs
+- eBL: DCSA-aligned with blockchain hash verification, status pie chart
+- Payments: Smart contract support with amount aggregation by status
+- IoT: Sensor monitoring with battery/signal bars, anomaly rate tracking
+- Port Ops: Berth TEU utilization progress bars, crane efficiency grid
