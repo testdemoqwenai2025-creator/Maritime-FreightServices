@@ -206,6 +206,7 @@ model Shipment {
   documents  ShipmentDocument[]
   events     ShipmentEvent[]
   bookings   Booking[]
+  electronicBills ElectronicBillOfLading[]
 }
 
 model Container {
@@ -679,5 +680,131 @@ model TelemetryReading {
   @@index([readingType, timestamp])
   @@index([isAnomaly])
   @@index([timestamp])
+}
+
+// ===========================
+// SPRINT 2: DIGITAL SUPPLY CHAIN
+// ===========================
+
+// Electronic Bill of Lading (eBL) — DCSA-aligned
+model ElectronicBillOfLading {
+  id              String   @id @default(cuid())
+  blNumber        String   @unique                 // e.g. "MARITIME-2026-SHA-001"
+  shipmentId      String                           // references Shipment
+  status          String   @default("Draft")      // Draft, Issued, Endorsed, InTransit, Delivered, Surrendered, Void
+  shipperName     String
+  shipperAddress  String?
+  consigneeName   String?
+  consigneeAddress String?
+  notifyParty     String?
+  carrierName     String
+  vesselName      String?
+  voyageNumber    String?
+  portOfLoading   String                           // UNLOCODE
+  portOfDischarge String                           // UNLOCODE
+  descriptionOfGoods String?
+  containerCount  Int      @default(0)
+  grossWeight     Float?                           // kg
+  measurement     Float?                           // CBM
+  freightTerms    String?  @default("Prepaid")
+  // Blockchain verification
+  documentHash    String?                          // SHA-256 of the BL content for integrity
+  blockchainTxId  String?                          // simulated on-chain tx reference
+  issuedAt        DateTime?
+  endorsedAt       DateTime?
+  deliveredAt      DateTime?
+  issuedBy        String?                          // User who issued
+  endorsedBy       String?
+  endorsedTo       String?                          // new consignee
+  transferHistory String?                          // JSON array of transfer records
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  shipment        Shipment  @relation(fields: [shipmentId], references: [id])
+
+  @@index([status])
+  @@index([shipmentId])
+  @@index([carrierName])
+  @@index([portOfLoading, portOfDischarge])
+  @@index([issuedAt])
+}
+
+// Payment Ledger — tracks freight payments linked to shipments/eBL
+model PaymentLedger {
+  id              String   @id @default(cuid())
+  paymentRef      String   @unique                 // e.g. "PAY-2026-001"
+  shipmentId      String?
+  eblId           String?
+  payerId         String?                          // User who pays
+  payeeId         String?                          // User who receives
+  amount          Float                            // USD
+  currency        String   @default("USD")
+  status          String   @default("Pending")   // Pending, Processing, Completed, Failed, Refunded
+  paymentMethod   String?                          // Wire, LetterOfCredit, SmartContract
+  paymentType     String   @default("Freight")    // Freight, Demurrage, Detention, Storage, Terminal, Insurance
+  // Smart contract fields
+  contractAddress String?                          // simulated contract address
+  contractStatus  String?                          // Created, Executed, Settled
+  triggerCondition String?                         // JSON: condition that auto-executes payment
+  // Timestamps
+  dueDate         DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status])
+  @@index([shipmentId])
+  @@index([payerId])
+  @@index([paymentType])
+  @@index([completedAt])
+}
+
+// Berth Allocation — port operations digital twin
+model BerthAllocation {
+  id              String   @id @default(cuid())
+  portId          String
+  berthNumber     String                           // e.g. "B-03"
+  vesselId        String?
+  vesselName      String?
+  arrivalETA      DateTime?
+  departureETD    DateTime?
+  actualArrival   DateTime?
+  actualDeparture DateTime?
+  status          String   @default("Planned")    // Planned, Arrived, Berthed, Working, Departed, Cancelled
+  cargoType       String?                          // Container, Bulk, Liquid, RoRo
+  teuExpected     Int?
+  teuLoaded       Int?
+  craneAssigned   Int      @default(0)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([portId, status])
+  @@index([berthNumber])
+  @@index([vesselId])
+  @@index([arrivalETA])
+  @@index([status])
+}
+
+// Crane Schedule — port operations digital twin
+model CraneSchedule {
+  id              String   @id @default(cuid())
+  portId          String
+  craneId         String                           // e.g. "QC-01"
+  craneType       String   @default("QuayCrane")  // QuayCrane, RTG, ReachStacker
+  berthNumber     String?
+  status          String   @default("Idle")       // Idle, Working, Maintenance, Offline
+  currentTask     String?                          // Loading, Discharging, Restow
+  movesPerHour    Float?
+  totalMoves      Int      @default(0)
+ efficiencyPct   Float?                           // target vs actual
+  shiftStart      DateTime?
+  shiftEnd        DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([portId, status])
+  @@index([craneType])
+  @@index([berthNumber])
 }
 

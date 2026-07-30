@@ -24,6 +24,10 @@ import NotificationCenter from './NotificationCenter'
 const VoyageAnalyticsPanel = dynamic(() => import('./VoyageAnalyticsPanel'), { ssr: false })
 const StateMachinePanel = dynamic(() => import('./StateMachinePanel'), { ssr: false })
 const DocumentWorkflowPanel = dynamic(() => import('./DocumentWorkflowPanel'), { ssr: false })
+const ElectronicBLPanel = dynamic(() => import('./ElectronicBLPanel'), { ssr: false })
+const PaymentLedgerPanel = dynamic(() => import('./PaymentLedgerPanel'), { ssr: false })
+const IoTTelemetryPanel = dynamic(() => import('./IoTTelemetryPanel'), { ssr: false })
+const PortTwinPanel = dynamic(() => import('./PortTwinPanel'), { ssr: false })
 
 // Dynamic import for VesselMap (leaflet needs window/DOM)
 const VesselMap = dynamic(() => import('./VesselMap'), { ssr: false, loading: () => <div className="flex h-[500px] items-center justify-center rounded-lg bg-muted"><div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-foreground" /></div> })
@@ -2003,6 +2007,22 @@ export default function MaritimeDashboard() {
                 <ClipboardCheck className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Workflows</span>
               </TabsTrigger>
+              <TabsTrigger value="ebl" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                <FileText className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">eBL</span>
+              </TabsTrigger>
+              <TabsTrigger value="payments" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                <DollarSign className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Payments</span>
+              </TabsTrigger>
+              <TabsTrigger value="iot" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                <Thermometer className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">IoT</span>
+              </TabsTrigger>
+              <TabsTrigger value="port-twin" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                <Building className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Port Ops</span>
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview">
@@ -2055,6 +2075,18 @@ export default function MaritimeDashboard() {
             </TabsContent>
             <TabsContent value="workflows">
               <DocumentWorkflowPanel />
+            </TabsContent>
+            <TabsContent value="ebl">
+              <ElectronicBLPanel />
+            </TabsContent>
+            <TabsContent value="payments">
+              <PaymentLedgerPanel />
+            </TabsContent>
+            <TabsContent value="iot">
+              <IoTTelemetryPanel />
+            </TabsContent>
+            <TabsContent value="port-twin">
+              <PortTwinPanel />
             </TabsContent>
           </Tabs>
         )}
