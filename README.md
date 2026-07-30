@@ -153,6 +153,53 @@ The platform implements a 3-leap progressive state machine architecture for ship
 | `/api/shipments/[id]/history` | GET | Full event timeline with state durations |
 | `/api/shipments/[id]/replay` | GET | Time-travel query (state at a specific timestamp) |
 
+## Phase 6: Digital Supply Chain (Sprint 1)
+
+### Authentication & RBAC
+
+The platform now implements multi-party authentication and role-based access control:
+
+| Role | Description | Can Approve Documents |
+|:---|:---|:---|
+| **Admin** | Full platform access with user management | Yes |
+| **Manager** | Operational management with approval authority | Yes |
+| **Customs** | Customs clearance and compliance approval | Yes |
+| **Carrier** | Carrier operations: vessel and booking management | No |
+| **Terminal** | Terminal operations: port and container visibility | No |
+| **Shipper** | Shipper operations: shipment and document creation | No |
+| **Viewer** | Read-only access to all public data | No |
+
+Login at `/login` with demo accounts for each role. Sessions use JWT tokens (24h expiry).
+
+### Document Workflow Engine
+
+A state-machine-driven document lifecycle system: **Draft -> Submitted -> UnderReview -> Approved/Rejected -> Archived**
+
+Features:
+- **SLA tracking** with automatic breach detection
+- **Role-gated approvals** (customs docs require Customs role, financial docs require Manager+)
+- **Immutable audit trail** for every workflow action
+- **Pipeline visualization** with step distribution counts
+- **Priority levels**: Low, Normal, High, Urgent (with SLA: 48h, 24h, 4h)
+- **Workflow types**: Standard, Expedited, Compliance, Financial
+
+### Audit Logging
+
+Every significant action (login, document submit, approval, data mutation) is recorded with:
+- Actor context (user ID, role, organization)
+- Action type, resource, and resource ID
+- IP address and user agent
+- Timestamped and indexed for fast querying
+
+### New Database Models (Phase 6)
+
+| Model | Description |
+|:---|:---|
+| **DocumentWorkflow** | Tracks document lifecycle with SLA tracking and assignment |
+| **DocumentWorkflowAction** | Immutable action history within each workflow |
+| **AuditLog** | System-wide audit trail for compliance and traceability |
+| **User** (enhanced) | Added passwordHash, organization, actorType, isActive, lastLoginAt |
+
 ## Quick Start Guide
 
 ### 1. Prerequisites
@@ -273,6 +320,11 @@ python scripts/un_comtrade_pipeline.py --estimate 50000000 --hs 2601
 | `/api/ai/routes` | GET | AI route optimisation |
 | `/api/ai/alerts` | GET | Automated alert system |
 | `/api/ai/forecast` | GET | Demand forecasting |
+| `/api/auth/[...nextauth]` | GET/POST | NextAuth.js authentication endpoint |
+| `/api/auth/session` | GET | Current session with role permissions |
+| `/api/auth/users` | GET/POST | User management (Admin/Manager) |
+| `/api/documents/workflows` | GET/POST | Document workflow list and create |
+| `/api/documents/workflows/[id]` | GET/PATCH | Workflow detail, approve/reject/resubmit/archive |
 
 ## Technology Stack
 
@@ -297,7 +349,7 @@ python scripts/un_comtrade_pipeline.py --estimate 50000000 --hs 2601
 | 3. Developer Experience | 2025 | Complete |
 | 4. AI and Predictive Analytics | 2025 | Complete |
 | 5. Strategic Intelligence | 2025 | Complete |
-| 6. Digital Supply Chain | 2026-2027 | Planned |
+| 6. Digital Supply Chain | 2025 | **In Progress** (Sprint 1 Complete) |
 | 7. Enterprise and Scale | 2027-2029 | Planned |
 | 8. Ecosystem and Marketplace | 2028-2030 | Planned |
 

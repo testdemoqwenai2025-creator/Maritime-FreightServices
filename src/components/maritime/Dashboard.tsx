@@ -9,7 +9,7 @@ import {
   Shield, AlertTriangle, FileText, Truck, Gauge, Fuel, Wrench,
   Users, Building, Warehouse, Snowflake, Radio, Flame,
   Plane, Handshake, BookOpen, Route, Download, Search, Moon, Sun, Leaf, Bell,
-  GitBranch
+  GitBranch, ClipboardCheck
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +23,7 @@ import CommandPalette from './CommandPalette'
 import NotificationCenter from './NotificationCenter'
 const VoyageAnalyticsPanel = dynamic(() => import('./VoyageAnalyticsPanel'), { ssr: false })
 const StateMachinePanel = dynamic(() => import('./StateMachinePanel'), { ssr: false })
+const DocumentWorkflowPanel = dynamic(() => import('./DocumentWorkflowPanel'), { ssr: false })
 
 // Dynamic import for VesselMap (leaflet needs window/DOM)
 const VesselMap = dynamic(() => import('./VesselMap'), { ssr: false, loading: () => <div className="flex h-[500px] items-center justify-center rounded-lg bg-muted"><div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-foreground" /></div> })
@@ -1998,6 +1999,10 @@ export default function MaritimeDashboard() {
                 <GitBranch className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">State Machine</span>
               </TabsTrigger>
+              <TabsTrigger value="workflows" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                <ClipboardCheck className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Workflows</span>
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview">
@@ -2047,6 +2052,9 @@ export default function MaritimeDashboard() {
             </TabsContent>
             <TabsContent value="state-machine">
               <StateMachinePanel />
+            </TabsContent>
+            <TabsContent value="workflows">
+              <DocumentWorkflowPanel />
             </TabsContent>
           </Tabs>
         )}

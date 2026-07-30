@@ -304,6 +304,7 @@ model ShipmentDocument {
 
   shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
   vessel   Vessel   @relation(fields: [vesselId], references: [id], onDelete: Cascade)
+  workflow DocumentWorkflow?
 }
 
 model ShipmentEvent {
@@ -370,15 +371,24 @@ model VesselDeparture {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  role      String   @default("Viewer") // Admin, Manager, Viewer
-  company   String?
-  phone     String?
-  timezone  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String?  // bcrypt hash for credentials auth (Phase 6)
+  name          String?
+  role          String   @default("Viewer") // Admin, Manager, Viewer, Shipper, Carrier, Customs, Terminal
+  organization  String?  // company / organization name (Phase 6 multi-party)
+  actorType     String?  @default("Internal") // Internal, Shipper, Carrier, CustomsBroker, TerminalOperator (Phase 6)
+  phone         String?
+  timezone      String?
+  avatar        String?  // avatar URL or initials
+  isActive      Boolean  @default(true) // soft-disable accounts (Phase 6)
+  lastLoginAt   DateTime? // track last login (Phase 6)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  auditLogs        AuditLog[]
+  documentActions   DocumentWorkflowAction[] @relation("DocumentActions")
+  assignedWorkflows DocumentWorkflow[]  @relation("AssignedWorkflows")
 }
 
 // ===========================
@@ -523,3 +533,88 @@ model Booking {
   originPort Port      @relation("BookingOrigin", fields: [originPortId], references: [id])
   destPort   Port      @relation("BookingDest", fields: [destPortId], references: [id])
 }
+
+// ===========================
+// PHASE 6: DIGITAL SUPPLY CHAIN
+// ===========================
+
+// Document Workflow — tracks the full lifecycle of shipping documents
+// through submission, review, approval/rejection with audit trail.
+// State machine: Draft → Submitted → UnderReview → Approved / Rejected → Archived
+
+model DocumentWorkflow {
+  id              String   @id @default(cuid())
+  documentId      String   @unique // references ShipmentDocument.id
+  workflowType    String   @default("Standard") // Standard, Expedited, Compliance, Financial
+  currentStep    String   @default("Draft") // Draft, Submitted, UnderReview, Approved, Rejected, Archived
+  priority        String   @default("Normal") // Low, Normal, High, Urgent
+  // Access control — who can view/act on this workflow
+  requiredRole    String?  @default("Admin") // minimum role to approve: Admin, Manager, Customs, Carrier
+  assignedToId    String?  // User currently responsible for next action
+  // SLA tracking
+  submittedAt     DateTime?
+  reviewedAt      DateTime?
+  completedAt     DateTime?
+  slaDeadline     DateTime? // deadline for review completion
+  slaBreached     Boolean  @default(false)
+  // Metadata
+  rejectionReason String?
+  remarks         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  document ShipmentDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  assignedTo User?             @relation("AssignedWorkflows", fields: [assignedToId], references: [id])
+  actions    DocumentWorkflowAction[]
+
+  @@index([currentStep])
+  @@index([assignedToId])
+  @@index([workflowType])
+  @@index([submittedAt])
+}
+
+// Individual actions within a document workflow — immutable audit trail
+
+model DocumentWorkflowAction {
+  id          String   @id @default(cuid())
+  workflowId  String
+  action      String   // Submitted, Assigned, Reviewed, Approved, Rejected, Resubmitted, Archived, Commented
+  fromStep    String   // state before this action
+  toStep      String   // state after this action
+  performedBy String   // User.id who performed the action
+  actorRole   String?  // role at time of action
+  comment     String?  // optional comment or reason
+  metadata    String?  // JSON payload for additional context
+  createdAt   DateTime @default(now())
+
+  workflow DocumentWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  performer User             @relation("DocumentActions", fields: [performedBy], references: [id])
+
+  @@index([workflowId, createdAt])
+  @@index([performedBy])
+  @@index([action])
+}
+
+// System-wide audit log for compliance and traceability
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?  // User.id (null for system actions)
+  userRole  String?  // role at time of action
+  userOrg   String?  // organization at time of action
+  action    String   // e.g. "login", "document.submit", "shipment.view", "admin.user.create"
+  resource  String   // e.g. "Shipment", "Document", "User", "Settings"
+  resourceId String?  // specific entity ID
+  details   String?  // JSON payload with action specifics
+  ipAddress  String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([action])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+}
+
