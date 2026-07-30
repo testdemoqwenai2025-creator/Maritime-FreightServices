@@ -1,498 +1,370 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import {
-  Activity, ArrowRight, Clock, Database, Cpu, RefreshCw, Trash2, Zap,
-  Shield, Globe, BarChart3, Server, AlertTriangle, CheckCircle2, XCircle,
-  ChevronDown, ChevronUp, Filter, Play, Pause, Timer, Layers, Radio,
-  Monitor, Wifi, ArrowDownToLine, Link2
+  ArrowLeft, Activity, Server, Database, Monitor,
+  Zap, RefreshCw, ChevronRight, Eye, Trash2, Play,
+  CheckCircle2, XCircle, Layers,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 
-// ------------------------------------------------------------------
-// Types
-// ------------------------------------------------------------------
-interface HandlerTrace {
-  traceId: string; path: string; method: string
-  handlerDurationMs: number; dbQueryCount: number; dbDurationMs: number
-  statusCode: number; responseSize: number; timestamp: string
-  middlewareDurationMs: number; middlewareActions: string[]
-  matchedPattern: string; cacheStatus: string; clientIp: string; userAgent: string
-}
-interface EndpointDef { method: string; path: string; description: string; category: string }
-interface TimingStat { avgMs: number; p50Ms: number; p95Ms: number; p99Ms: number; maxMs: number; minMs?: number }
-interface Stats {
-  totalRequests: number; timeRange?: { oldest: string; newest: string }
-  middleware: TimingStat; handler: TimingStat; endToEnd: TimingStat
-  database: { avgMs: number; p50Ms: number; p95Ms: number; maxMs: number; totalQueries: number; tracesWithDb: number }
-  statusCodes?: Record<number, number>; methods?: Record<string, number>
-  topEndpoints?: { path: string; count: number }[]
-  topMiddlewareActions?: { action: string; count: number }[]
-  responseSize?: { avgBytes: number; maxBytes: number }
-  errorRate?: number; errors?: number; message?: string
-}
-interface TraceResponse {
-  meta: { generatedAt: string; appUptimeSeconds: number; traceBufferSize: number; endpointCount: number; ownHandlerDurationMs: number }
-  stats: Stats; traces: HandlerTrace[]; endpoints: EndpointDef[]
+// ─── Types ──────────────────────────────────────────────────────────
+
+interface ServerMetrics {
+  runtime: string; platform: string; arch: string
+  uptimeSeconds: number; uptimeHuman: string
+  memory: { rssMb: number; heapUsedMb: number; heapTotalMb: number; heapUtilPct: number }
 }
 
-// Frontend beat types
-interface FrontendBeat {
-  beatId: string; traceId: string | null; clientTimestamp: string
-  clientSentAt: number; serverReceivedAt: number; networkLatencyMs: number
-  targetPath: string; targetMethod: string; clientStatus: number
-  clientResponseTimeMs: number; clientResponseSize: number; pageUrl: string
-  serverMiddlewareDurationMs: number; serverHandlerDurationMs: number
-  serverDbDurationMs: number; serverDbQueries: number; serverStatusCode: number
-  correlated: boolean; clientToServerMs?: number; serverProcessingMs?: number; serverToClientMs?: number
-}
-interface BeatResponse {
-  meta: { bufferSize: number; totalBeats: number; timestamp: string }
-  stats: {
-    totalBeats: number; correlatedBeats: number; correlationRate: number
-    uniquePages: number
-    roundTrip: { avgMs: number; p50Ms: number; p95Ms: number; maxMs: number }
-    networkLatency: { avgMs: number; p50Ms: number; maxMs: number }
-    serverBreakdown: { middlewareAvgMs: number; handlerAvgMs: number; dbAvgMs: number }
-    topPaths: { path: string; count: number }[]; message?: string
-  }
-  beats: FrontendBeat[]
+interface DatabaseMetrics {
+  status: string; latencyMs: number
+  tables?: Record<string, number>; dbSizeMb?: number
+  error?: string
 }
 
-// ------------------------------------------------------------------
-// Helpers
-// ------------------------------------------------------------------
-const methodColor = (m: string) =>
-  ({ GET: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', POST: 'bg-blue-500/20 text-blue-400 border-blue-500/30', PUT: 'bg-amber-500/20 text-amber-400 border-amber-500/30', DELETE: 'bg-red-500/20 text-red-400 border-red-500/30' }[m] || 'bg-muted text-muted-foreground border-border')
-const statusColor = (c: number) => c < 300 ? 'text-emerald-400' : c < 400 ? 'text-amber-400' : 'text-red-400'
-const statusBg = (c: number) => c < 300 ? 'bg-emerald-500/10 border-emerald-500/20' : c < 400 ? 'bg-amber-500/10 border-amber-500/20' : 'bg-red-500/10 border-red-500/20'
-const durColor = (ms: number) => ms < 1 ? 'bg-emerald-500' : ms < 5 ? 'bg-yellow-500' : ms < 20 ? 'bg-amber-500' : 'bg-red-500'
-const fmtBytes = (b: number) => b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`
-
-// ------------------------------------------------------------------
-// Sub-components
-// ------------------------------------------------------------------
-function StatCard({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
-  return (
-    <Card><CardContent className="pt-6">
-      <div className="flex items-center gap-3 mb-2"><div className="rounded-md bg-muted p-2">{icon}</div><span className="text-sm text-muted-foreground">{label}</span></div>
-      <p className="text-2xl font-bold font-mono">{value}</p>
-      {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
-    </CardContent></Card>
-  )
+interface Correlated {
+  traceId: string; timestamp: string; path: string; method: string
+  waterfall: { networkMs: number; serverHandlerMs: number; databaseMs: number; dbQueries: number }
+  totals: { roundTripMs: number; networkOnlyMs: number; serverTotalMs: number }
+  status: { client: number; server: number }
+  responseSize: number
 }
 
-function TimingCard({ title, icon, data }: { title: string; icon: React.ReactNode; data: TimingStat }) {
-  const rows = [{ label: 'Average', value: data.avgMs }, { label: 'P50', value: data.p50Ms }, { label: 'P95', value: data.p95Ms }, { label: 'P99', value: data.p99Ms }, { label: 'Max', value: data.maxMs }]
-  const maxVal = Math.max(...rows.map(r => r.value), 0.01)
-  return (
-    <Card><CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2">{icon} {title}</CardTitle></CardHeader>
-      <CardContent className="space-y-2">
-        {rows.map(r => (
-          <div key={r.label} className="flex items-center gap-3 text-sm">
-            <span className="w-14 text-muted-foreground text-xs">{r.label}</span>
-            <div className="flex-1 h-2 rounded-full bg-muted"><div className={`h-full rounded-full ${durColor(r.value)}`} style={{ width: `${(r.value / maxVal) * 100}%` }} /></div>
-            <span className="font-mono text-xs w-16 text-right">{r.value.toFixed(2)} ms</span>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  )
+interface E2EData {
+  meta: { generatedAt: string; ownLatencyMs: number; traceCount: number; beatCount: number; correlatedCount: number }
+  server: ServerMetrics
+  database: DatabaseMetrics
+  traces: any[]
+  beats: any[]
+  frontendStats: any
+  correlated: Correlated[]
 }
 
-// ------------------------------------------------------------------
-// Traced fetch — wraps fetch() to measure client-side timing
-// ------------------------------------------------------------------
-async function tracedFetch(path: string, method = 'GET') {
-  const clientSentAt = performance.now()
-  const clientTimestamp = new Date().toISOString()
-  let clientStatus = 0
-  let clientResponseSize = 0
-  let traceId: string | null = null
+// ─── API endpoints to probe ───────────────────────────────────────
 
-  try {
-    const res = await fetch(path)
-    clientStatus = res.status
-    traceId = res.headers.get('x-trace-id')
-    const text = await res.text()
-    clientResponseSize = text.length
-    const clientResponseTimeMs = parseFloat((performance.now() - clientSentAt).toFixed(3))
+const PROBE_ENDPOINTS = [
+  { path: '/api/health', label: 'Health Check', category: 'System' },
+  { path: '/api/dashboard', label: 'Dashboard Aggregation', category: 'Core' },
+  { path: '/api/vessels', label: 'Vessels List', category: 'Core' },
+  { path: '/api/ports', label: 'Ports List', category: 'Core' },
+  { path: '/api/shipments', label: 'Shipments List', category: 'Core' },
+  { path: '/api/carriers', label: 'Carriers List', category: 'Core' },
+  { path: '/api/trade-data', label: 'Trade Data', category: 'Analytics' },
+  { path: '/api/ai/eta', label: 'AI ETA Prediction', category: 'AI' },
+  { path: '/api/ai/anomaly', label: 'AI Anomaly Detection', category: 'AI' },
+  { path: '/api/state-machine/definition', label: 'State Machine Def', category: 'Engine' },
+  { path: '/api/documents/workflows', label: 'Doc Workflows', category: 'Workflow' },
+  { path: '/api/auth/session', label: 'Auth Session', category: 'Auth' },
+]
 
-    // Report beat to server (fire-and-forget)
-    fetch('/api/observability/frontend-beat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clientTimestamp, clientSentAt, clientResponseTimeMs, clientStatus,
-        clientResponseSize, traceId, targetPath: path, targetMethod: method,
-        pageUrl: window.location.href, userAgent: navigator.userAgent,
-      }),
-    }).catch(() => {})
+// ─── Helpers ────────────────────────────────────────────────────────
 
-    return { json: JSON.parse(text), clientResponseTimeMs, traceId, status: clientStatus }
-  } catch (err) {
-    const clientResponseTimeMs = parseFloat((performance.now() - clientSentAt).toFixed(3))
-    return { json: null, clientResponseTimeMs, traceId, status: 0 }
-  }
+function fmtMs(ms: number): string {
+  if (ms < 1) return '< 1ms'
+  if (ms < 1000) return ms.toFixed(1) + 'ms'
+  return (ms / 1000).toFixed(2) + 's'
 }
 
-// ------------------------------------------------------------------
-// Main Page
-// ------------------------------------------------------------------
+function fmtBytes(b: number): string {
+  if (b < 1024) return b + 'B'
+  if (b < 1048576) return (b / 1024).toFixed(1) + 'KB'
+  return (b / 1048576).toFixed(1) + 'MB'
+}
+
+function timeAgo(iso: string): string {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
+  if (s < 60) return s + 's ago'
+  const m = Math.floor(s / 60)
+  if (m < 60) return m + 'm ago'
+  return Math.floor(m / 60) + 'h ago'
+}
+
+function statusColor(code: number): string {
+  if (code >= 200 && code < 300) return 'text-green-400'
+  if (code >= 400 && code < 500) return 'text-amber-400'
+  return 'text-red-400'
+}
+
+function wfBarWidth(ms: number, maxMs: number): string {
+  if (maxMs <= 0) return '0%'
+  return Math.max(1, (ms / maxMs) * 100) + '%'
+}
+
+// ─── Main Component ───────────────────────────────────────────────
+
 export default function ObservabilityPage() {
-  const [data, setData] = useState<TraceResponse | null>(null)
-  const [beatData, setBeatData] = useState<BeatResponse | null>(null)
+  const [data, setData] = useState<E2EData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [pathFilter, setPathFilter] = useState('')
-  const [expandedTrace, setExpandedTrace] = useState<string | null>(null)
-  const [autoRefresh, setAutoRefresh] = useState(true)
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const [probing, setProbing] = useState(false)
-  const [probeResults, setProbeResults] = useState<{ path: string; method: string; latencyMs: number; status: number; traceId: string }[]>([])
-  const [frontendProbing, setFrontendProbing] = useState(false)
+  const [probeResults, setProbeResults] = useState<Record<string, { ok: boolean; latencyMs: number; status: number; size: number }>>({})
+  const [navTiming, setNavTiming] = useState<Record<string, number>>({})
+  const [expandedWaterfall, setExpandedWaterfall] = useState<string | null>(null)
+  const probeIndexRef = useRef(0)
 
-  // Server-side traces
-  const fetchTraces = useCallback(async () => {
+  // ── Fetch E2E snapshot ──
+  const fetchSnapshot = useCallback(async () => {
     try {
-      const url = pathFilter ? `/api/observability/trace?path=${encodeURIComponent(pathFilter)}&limit=100` : '/api/observability/trace?limit=100'
-      const res = await fetch(url)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setData(await res.json())
-      setError(null)
-    } catch (err) { setError(String(err)) }
+      const res = await fetch('/api/observability/e2e')
+      if (res.ok) setData(await res.json())
+    } catch (e) { console.error('E2E fetch failed:', e) }
     finally { setLoading(false) }
-  }, [pathFilter])
-
-  // Frontend beats
-  const fetchBeats = useCallback(async () => {
-    try {
-      const res = await fetch('/api/observability/frontend-beat?limit=100')
-      if (res.ok) setBeatData(await res.json())
-    } catch {}
   }, [])
 
-  useEffect(() => { fetchTraces(); fetchBeats() }, [fetchTraces, fetchBeats])
+  useEffect(() => { fetchSnapshot() }, [fetchSnapshot])
+
+  // ── Capture Navigation Timing ──
   useEffect(() => {
-    if (autoRefresh) {
-      intervalRef.current = setInterval(() => { fetchTraces(); fetchBeats() }, 3000)
+    if (typeof window === 'undefined' || !window.performance?.getEntriesByType) return
+    const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
+    if (nav) {
+      setNavTiming({
+        dns: nav.domainLookupEnd - nav.domainLookupStart,
+        tcp: nav.connectEnd - nav.connectStart,
+        tls: nav.secureConnectionStart > 0 ? nav.connectEnd - nav.secureConnectionStart : 0,
+        ttfb: nav.responseStart - nav.requestStart,
+        contentDownload: nav.responseEnd - nav.responseStart,
+        domContentLoaded: nav.domContentLoadedEventEnd - nav.startTime,
+        fullLoad: nav.loadEventEnd - nav.startTime,
+      })
     }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
-  }, [autoRefresh, fetchTraces, fetchBeats])
+    const resources = performance.getEntriesByType('resource')
+    const totalTransfer = resources.reduce((s, r) => s + r.transferSize, 0)
+    setNavTiming(prev => ({ ...prev, resourceCount: resources.length, resourceTransferBytes: totalTransfer }))
+  }, [])
 
-  const clearAll = async () => {
-    await Promise.all([
-      fetch('/api/observability/trace?action=clear'),
-      fetch('/api/observability/frontend-beat?action=clear'),
-    ])
-    fetchTraces(); fetchBeats()
-  }
-
-  // Server-side probe (basic)
-  const probeEndpoints = async () => {
+  // ── Run probes ──
+  async function runProbes() {
     setProbing(true)
-    const targets = [
-      { method: 'GET', path: '/api/health' }, { method: 'GET', path: '/api/dashboard' },
-      { method: 'GET', path: '/api/vessels?limit=5' }, { method: 'GET', path: '/api/shipments?limit=5' },
-      { method: 'GET', path: '/api/ports?limit=5' }, { method: 'GET', path: '/api/carriers?limit=5' },
-    ]
-    const results: typeof probeResults = []
-    for (const t of targets) {
-      const start = performance.now()
+    setProbeResults({})
+    probeIndexRef.current = 0
+    for (const ep of PROBE_ENDPOINTS) {
+      const fetchStart = performance.now()
       try {
-        const res = await fetch(t.path)
-        results.push({ ...t, latencyMs: parseFloat((performance.now() - start).toFixed(3)), status: res.status, traceId: res.headers.get('x-trace-id') || 'n/a' })
-      } catch { results.push({ ...t, latencyMs: 0, status: 0, traceId: 'error' }) }
+        const res = await fetch(ep.path)
+        const roundTripMs = performance.now() - fetchStart
+        const size = parseInt(res.headers.get('content-length') || '0') || 0
+        const traceId = res.headers.get('x-trace-id') || null
+        setProbeResults(prev => ({ ...prev, [ep.path]: { ok: res.ok, latencyMs: roundTripMs, status: res.status, size } }))
+        fetch('/api/observability/e2e', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ traceId, pageUrl: window.location.pathname, fetchUrl: ep.path, fetchMethod: 'GET', fetchRoundTripMs: roundTripMs, fetchStatus: res.status, fetchResponseSize: size, userAgent: navigator.userAgent, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight, connectionType: (navigator as any).connection?.effectiveType || 'unknown', ...navTiming }),
+        }).catch(() => {})
+      } catch {
+        setProbeResults(prev => ({ ...prev, [ep.path]: { ok: false, latencyMs: 0, status: 0, size: 0 } }))
+      }
+      probeIndexRef.current++
+      await new Promise(r => setTimeout(r, 150))
     }
-    setProbeResults(results)
+    setTimeout(fetchSnapshot, 500)
     setProbing(false)
-    setTimeout(() => { fetchTraces(); fetchBeats() }, 500)
   }
 
-  // Frontend-to-backend probe — uses tracedFetch to capture FULL pipeline
-  const probeFrontend = async () => {
-    setFrontendProbing(true)
-    const targets = ['/api/health', '/api/dashboard', '/api/vessels?limit=5', '/api/shipments?limit=5', '/api/ports?limit=5', '/api/carriers?limit=5']
-    for (const path of targets) await tracedFetch(path)
-    // Wait for beats to register
-    await new Promise(r => setTimeout(r, 300))
-    fetchBeats()
-    fetchTraces()
-    setFrontendProbing(false)
+  async function clearAll() {
+    await fetch('/api/observability/e2e?action=clear')
+    setProbeResults({})
+    fetchSnapshot()
   }
 
-  const stats = data?.stats
-  const traces = data?.traces || []
-  const endpoints = data?.endpoints || []
-  const meta = data?.meta
-  const maxE2E = Math.max(...traces.map(t => t.middlewareDurationMs + t.handlerDurationMs), 1)
-  const beatStats = beatData?.stats
-  const beats = beatData?.beats || []
+  if (loading) {
+    return (<div className="flex min-h-screen items-center justify-center bg-background"><div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-foreground" /></div>)
+  }
+
+  const probeEndpoints = Object.keys(probeResults)
+  const allOk = probeEndpoints.length === PROBE_ENDPOINTS.length && probeEndpoints.every(k => probeResults[k].ok)
+  const maxLatency = Math.max(...Object.values(probeResults).map(r => r.latencyMs), 1)
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-6 lg:p-8">
-      {/* Header */}
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="flex items-center gap-3 text-2xl font-bold tracking-tight md:text-3xl">
-            <Radio className="h-8 w-8 text-emerald-400" />
-            Request Observability
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Live trace: Frontend &rarr; Network &rarr; Middleware &rarr; Handler &rarr; Database
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="gap-1.5 px-3 py-1.5"><Activity className="h-3.5 w-3.5" />{meta?.traceBufferSize ?? 0} server</Badge>
-          <Badge variant="outline" className="gap-1.5 px-3 py-1.5"><Monitor className="h-3.5 w-3.5" />{beatData?.meta.bufferSize ?? 0} frontend</Badge>
-        </div>
-      </div>
-
-      {/* Action Bar */}
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <Button variant={autoRefresh ? 'default' : 'outline'} size="sm" onClick={() => setAutoRefresh(!autoRefresh)} className="gap-2">
-          {autoRefresh ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}{autoRefresh ? 'Auto ON' : 'Auto OFF'}
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => { fetchTraces(); fetchBeats() }} className="gap-2"><RefreshCw className="h-4 w-4" /> Refresh</Button>
-        <Button variant="default" size="sm" onClick={probeFrontend} disabled={frontendProbing} className="gap-2">
-          <Monitor className="h-4 w-4" />{frontendProbing ? 'Probing...' : 'Frontend Probe'}
-        </Button>
-        <Button variant="outline" size="sm" onClick={probeEndpoints} disabled={probing} className="gap-2">
-          <Zap className="h-4 w-4" />{probing ? 'Probing...' : 'Server Probe'}
-        </Button>
-        <Button variant="outline" size="sm" onClick={clearAll} className="gap-2 text-red-400 hover:text-red-300">
-          <Trash2 className="h-4 w-4" /> Clear
-        </Button>
-        <div className="flex items-center gap-2 ml-auto">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Filter path" value={pathFilter} onChange={e => setPathFilter(e.target.value)} className="w-56 h-9 text-sm" />
-        </div>
-      </div>
-
-      {error && (
-        <Card className="mb-6 border-red-500/30 bg-red-500/5"><CardContent className="flex items-center gap-3 pt-6"><XCircle className="h-5 w-5 text-red-400" /><p className="text-sm text-red-300">{error}</p></CardContent></Card>
-      )}
-
-      <Tabs defaultValue="frontend" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="frontend" className="gap-2"><Monitor className="h-4 w-4" /> Frontend</TabsTrigger>
-          <TabsTrigger value="overview" className="gap-2"><BarChart3 className="h-4 w-4" /> Server</TabsTrigger>
-          <TabsTrigger value="traces" className="gap-2"><Layers className="h-4 w-4" /> Traces</TabsTrigger>
-          <TabsTrigger value="endpoints" className="gap-2"><Server className="h-4 w-4" /> Endpoints</TabsTrigger>
-          <TabsTrigger value="architecture" className="gap-2"><Globe className="h-4 w-4" /> Pipeline</TabsTrigger>
-        </TabsList>
-
-        {/* ========== FRONTEND TAB ========== */}
-        <TabsContent value="frontend" className="space-y-6">
-          {beatStats && beatStats.message ? (
-            <Card><CardContent className="flex flex-col items-center justify-center py-16 text-center">
-              <Monitor className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium">No Frontend Beats</h3>
-              <p className="text-sm text-muted-foreground mt-1 mb-4">{beatStats.message}</p>
-              <Button onClick={probeFrontend} disabled={frontendProbing} className="gap-2"><Monitor className="h-4 w-4" />{frontendProbing ? 'Running...' : 'Run Frontend Probe'}</Button>
-            </CardContent></Card>
-          ) : beatStats ? (
-            <>
-              {/* Summary cards */}
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-                <StatCard icon={<Monitor className="h-5 w-5 text-blue-400" />} label="Frontend Beats" value={beatStats.totalBeats.toString()} sub={`${beatStats.uniquePages} page(s)`} />
-                <StatCard icon={<Wifi className="h-5 w-5 text-cyan-400" />} label="Avg Round-Trip" value={`${beatStats.roundTrip.avgMs.toFixed(1)} ms`} sub={`p95: ${beatStats.roundTrip.p95Ms.toFixed(1)} ms`} />
-                <StatCard icon={<ArrowDownToLine className="h-5 w-5 text-emerald-400" />} label="Avg Network" value={`${beatStats.networkLatency.avgMs.toFixed(1)} ms`} sub={`p50: ${beatStats.networkLatency.p50Ms.toFixed(1)} ms`} />
-                <StatCard icon={<Cpu className="h-5 w-5 text-purple-400" />} label="Server Processing" value={`${(beatStats.serverBreakdown.middlewareAvgMs + beatStats.serverBreakdown.handlerAvgMs).toFixed(1)} ms`} sub={`MW: ${beatStats.serverBreakdown.middlewareAvgMs.toFixed(2)}ms + H: ${beatStats.serverBreakdown.handlerAvgMs.toFixed(1)}ms`} />
-                <StatCard icon={<Link2 className="h-5 w-5" />} label="Correlation" value={`${beatStats.correlationRate}%`} sub={`${beatStats.correlatedBeats}/${beatStats.totalBeats} beats matched`} />
-              </div>
-
-              {/* Correlated pipeline waterfall */}
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><Activity className="h-4 w-4" />Correlated Frontend &rarr; Server Pipeline</CardTitle></CardHeader>
-                <CardContent>
-                  {beats.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">No beats. Click &quot;Frontend Probe&quot; to generate traffic from the browser.</p>
-                  ) : (
-                    <ScrollArea className="h-[500px]">
-                      <div className="space-y-3">
-                        {[...beats].reverse().map((b) => {
-                          const total = b.clientResponseTimeMs || 1
-                          const netPct = Math.max((b.networkLatencyMs / total) * 100, 1)
-                          const mwPct = Math.max((b.serverMiddlewareDurationMs / total) * 100, 0.5)
-                          const hPct = Math.max(((b.serverHandlerDurationMs - b.serverDbDurationMs) / total) * 100, 0.5)
-                          const dbPct = Math.max((b.serverDbDurationMs / total) * 100, 0.5)
-                          const returnPct = Math.max(100 - netPct - mwPct - hPct - dbPct, 0)
-                          return (
-                            <div key={b.beatId} className="rounded-md border p-3 space-y-2">
-                              <div className="flex items-center gap-2 text-sm">
-                                <Badge className={`${methodColor(b.targetMethod)} text-[10px] border`}>{b.targetMethod}</Badge>
-                                <code className="text-xs font-mono flex-1 truncate" title={b.targetPath}>{b.targetPath}</code>
-                                <Badge variant={b.correlated ? 'outline' : 'secondary'} className={`text-[10px] ${b.correlated ? 'border-emerald-500/30 text-emerald-400' : ''}`}>
-                                  {b.correlated ? 'Linked' : 'Unlinked'}
-                                </Badge>
-                                <span className={`font-mono text-xs font-bold ${statusColor(b.clientStatus)}`}>{b.clientStatus}</span>
-                                <span className="font-mono text-xs text-muted-foreground w-20 text-right">{b.clientResponseTimeMs.toFixed(1)} ms</span>
-                              </div>
-                              {/* Waterfall bar */}
-                              <div className="flex h-5 rounded overflow-hidden text-[9px] font-mono leading-5">
-                                <div className="bg-cyan-500/70 text-center" style={{ width: `${netPct}%` }} title={`Network: ${b.networkLatencyMs.toFixed(1)}ms`}>NET</div>
-                                <div className="bg-emerald-500/70 text-center" style={{ width: `${mwPct}%` }} title={`Middleware: ${b.serverMiddlewareDurationMs}ms`}>MW</div>
-                                <div className="bg-purple-500/70 text-center" style={{ width: `${hPct}%` }} title={`Handler: ${(b.serverHandlerDurationMs - b.serverDbDurationMs).toFixed(1)}ms`}>H</div>
-                                <div className="bg-amber-500/70 text-center" style={{ width: `${dbPct}%` }} title={`DB: ${b.serverDbDurationMs}ms`}>DB</div>
-                                {returnPct > 0 && <div className="bg-blue-500/40 text-center" style={{ width: `${returnPct}%` }} title={`Return: ${returnPct.toFixed(1)}%`}>RET</div>}
-                              </div>
-                              <div className="flex flex-wrap gap-3 text-[10px] text-muted-foreground">
-                                <span>Network: <b className="text-cyan-400">{b.networkLatencyMs.toFixed(1)}ms</b></span>
-                                <span>Middleware: <b className="text-emerald-400">{b.serverMiddlewareDurationMs}ms</b></span>
-                                <span>Handler: <b className="text-purple-400">{b.serverHandlerDurationMs}ms</b></span>
-                                <span>DB: <b className="text-amber-400">{b.serverDbDurationMs}ms ({b.serverDbQueries}q)</b></span>
-                                <span>Size: <b>{fmtBytes(b.clientResponseSize)}</b></span>
-                                <span className="text-muted-foreground/50">{b.traceId || '—'}</span>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </ScrollArea>
-                  )}
-                </CardContent>
-              </Card>
-            </>
-          ) : loading ? <Card><CardContent className="py-16 text-center text-muted-foreground">Loading...</CardContent></Card> : null}
-        </TabsContent>
-
-        {/* ========== SERVER OVERVIEW ========== */}
-        <TabsContent value="overview" className="space-y-6">
-          {stats && stats.message ? (
-            <Card><CardContent className="flex flex-col items-center justify-center py-16 text-center">
-              <Radio className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium">No Server Traces Yet</h3>
-              <p className="text-sm text-muted-foreground mt-1 mb-4">{stats.message}</p>
-              <Button onClick={probeEndpoints} disabled={probing} className="gap-2"><Zap className="h-4 w-4" />Probe Now</Button>
-            </CardContent></Card>
-          ) : stats ? (
-            <>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <StatCard icon={<Activity className="h-5 w-5 text-emerald-400" />} label="Server Requests" value={stats.totalRequests.toString()} sub={stats.timeRange?.oldest ? `Since ${new Date(stats.timeRange.oldest).toLocaleTimeString()}` : ''} />
-                <StatCard icon={<Clock className="h-5 w-5 text-blue-400" />} label="Avg E2E" value={`${stats.endToEnd.avgMs.toFixed(2)} ms`} sub={`p95: ${stats.endToEnd.p95Ms.toFixed(2)} ms`} />
-                <StatCard icon={<Database className="h-5 w-5 text-purple-400" />} label="Avg DB" value={`${stats.database.avgMs.toFixed(2)} ms`} sub={`${stats.database.totalQueries} queries`} />
-                <StatCard icon={(stats.errorRate ?? 0) === 0 ? <CheckCircle2 className="h-5 w-5 text-emerald-400" /> : <AlertTriangle className="h-5 w-5 text-red-400" />} label="Errors" value={`${stats.errorRate?.toFixed(2)}%`} sub={`${stats.errors ?? 0}`} />
-              </div>
-              <div className="grid gap-4 md:grid-cols-3">
-                <TimingCard title="Middleware" icon={<Shield className="h-4 w-4" />} data={stats.middleware} />
-                <TimingCard title="Handler" icon={<Cpu className="h-4 w-4" />} data={stats.handler} />
-                <TimingCard title="E2E" icon={<ArrowRight className="h-4 w-4" />} data={stats.endToEnd} />
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <Card><CardHeader className="pb-3"><CardTitle className="text-base">Top Endpoints</CardTitle></CardHeader><CardContent><div className="space-y-2">
-                  {stats.topEndpoints?.map((ep, i) => { const mx = (stats.topEndpoints?.[0]?.count ?? 1); return (<div key={i} className="flex items-center gap-2 text-sm"><code className="w-48 truncate text-xs font-mono text-muted-foreground" title={ep.path}>{ep.path}</code><div className="flex-1 h-2 rounded-full bg-muted"><div className="h-full rounded-full bg-blue-500" style={{ width: `${(ep.count / mx) * 100}%` }} /></div><span className="text-xs font-mono w-8 text-right">{ep.count}</span></div>) })}
-                </div></CardContent></Card>
-                <Card><CardHeader className="pb-3"><CardTitle className="text-base">Status & Methods</CardTitle></CardHeader><CardContent className="space-y-4">
-                  <div className="flex flex-wrap gap-2">{Object.entries(stats.statusCodes || {}).map(([c, n]) => <Badge key={c} variant="outline" className={`${statusBg(Number(c))} text-xs border`}>{c}: {n}</Badge>)}</div>
-                  <Separator />
-                  <div className="flex flex-wrap gap-2">{Object.entries(stats.methods || {}).map(([m, n]) => <Badge key={m} className={`${methodColor(m)} text-xs border`}>{m}: {n}</Badge>)}</div>
-                </CardContent></Card>
-              </div>
-            </>
-          ) : null}
-        </TabsContent>
-
-        {/* ========== TRACES ========== */}
-        <TabsContent value="traces">
-          <Card><CardHeader className="pb-3"><CardTitle className="text-base">Server Trace Entries</CardTitle></CardHeader><CardContent>
-            {traces.length === 0 ? (<p className="text-sm text-muted-foreground text-center py-8">No traces.</p>) : (
-              <ScrollArea className="h-[600px]"><div className="space-y-2">
-                {[...traces].reverse().map((t) => {
-                  const e2e = t.middlewareDurationMs + t.handlerDurationMs
-                  const isExp = expandedTrace === t.traceId
-                  return (
-                    <div key={t.traceId} className="rounded-md border">
-                      <button className="w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm hover:bg-muted/50 transition-colors" onClick={() => setExpandedTrace(isExp ? null : t.traceId)}>
-                        <Badge className={`${methodColor(t.method)} text-xs border min-w-[50px] justify-center`}>{t.method}</Badge>
-                        <code className="flex-1 text-xs font-mono text-muted-foreground truncate" title={t.path}>{t.path}</code>
-                        <span className={`font-mono text-xs font-bold ${statusColor(t.statusCode)}`}>{t.statusCode}</span>
-                        <div className="w-32"><div className="flex gap-0.5 h-3"><div className="rounded-l-full bg-cyan-500/80" style={{ width: `${Math.max((t.middlewareDurationMs / maxE2E) * 100, 2)}%` }} /><div className="rounded-r-full bg-blue-500/80" style={{ width: `${Math.max((t.handlerDurationMs / maxE2E) * 100, 2)}%` }} /></div></div>
-                        <span className="font-mono text-xs w-16 text-right">{e2e.toFixed(2)} ms</span>
-                        <span className="text-[10px] text-muted-foreground w-20 text-right">{new Date(t.timestamp).toLocaleTimeString()}</span>
-                        {isExp ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                      </button>
-                      {isExp && (
-                        <div className="border-t px-3 py-3 bg-muted/20 text-xs space-y-2">
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <div><span className="text-muted-foreground">Trace ID:</span><br /><code className="font-mono text-emerald-400">{t.traceId}</code></div>
-                            <div><span className="text-muted-foreground">Middleware:</span><br /><span className="font-mono">{t.middlewareDurationMs} ms</span></div>
-                            <div><span className="text-muted-foreground">Handler:</span><br /><span className="font-mono">{t.handlerDurationMs} ms</span></div>
-                            <div><span className="text-muted-foreground">Database:</span><br /><span className="font-mono">{t.dbDurationMs} ms ({t.dbQueryCount}q)</span></div>
-                          </div>
-                          <div className="flex flex-wrap gap-1 mt-1">{t.middlewareActions.map((a, i) => <Badge key={i} variant="outline" className="text-[10px] px-1.5 py-0">{a}</Badge>)}</div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div></ScrollArea>
-            )}
-          </CardContent></Card>
-        </TabsContent>
-
-        {/* ========== ENDPOINTS ========== */}
-        <TabsContent value="endpoints">
-          <Card><CardHeader className="pb-3"><CardTitle className="text-base">Registered API Endpoints ({endpoints.length})</CardTitle></CardHeader><CardContent>
-            <ScrollArea className="h-[600px]"><div className="space-y-1">
-              {endpoints.map((ep, i) => (
-                <div key={i} className="flex items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-muted/50">
-                  <Badge className={`${methodColor(ep.method)} text-xs border min-w-[50px] justify-center`}>{ep.method}</Badge>
-                  <code className="flex-1 font-mono text-xs">{ep.path}</code>
-                  <Badge variant="outline" className="text-[10px]">{ep.category}</Badge>
-                  <span className="text-xs text-muted-foreground hidden lg:block max-w-xs truncate">{ep.description}</span>
-                </div>
-              ))}
-            </div></ScrollArea>
-          </CardContent></Card>
-        </TabsContent>
-
-        {/* ========== ARCHITECTURE PIPELINE ========== */}
-        <TabsContent value="architecture">
-          <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
-            <Card><CardHeader className="pb-3"><CardTitle className="text-base">Full-Stack Pipeline</CardTitle></CardHeader><CardContent>
-              <div className="space-y-0">
-                {[
-                  { icon: <Monitor className="h-5 w-5" />, label: 'Browser (React)', desc: 'tracedFetch() measures clientSentAt, reads x-trace-id from response headers', color: 'border-blue-500/40 bg-blue-500/5' },
-                  { icon: <Wifi className="h-5 w-5" />, label: 'Network', desc: 'HTTP request/response latency (measured as serverReceivedAt - clientSentAt)', color: 'border-cyan-500/40 bg-cyan-500/5' },
-                  { icon: <Shield className="h-5 w-5" />, label: 'Next.js Middleware (Edge)', desc: 'Route classification, CORS, security headers, trace ID injection', color: 'border-emerald-500/40 bg-emerald-500/5' },
-                  { icon: <Server className="h-5 w-5" />, label: 'Route Handler (Node.js)', desc: 'Business logic, Prisma ORM queries, response serialization', color: 'border-purple-500/40 bg-purple-500/5' },
-                  { icon: <Database className="h-5 w-5" />, label: 'SQLite via Prisma', desc: 'SQL execution, result mapping', color: 'border-amber-500/40 bg-amber-500/5' },
-                  { icon: <Link2 className="h-5 w-5" />, label: 'Frontend Beat Reporter', desc: 'POST /api/observability/frontend-beat — correlates client timing with server trace', color: 'border-rose-500/40 bg-rose-500/5' },
-                ].map((step, i) => (
-                  <div key={i}>
-                    <div className={`rounded-lg border p-4 ${step.color}`}>
-                      <div className="flex items-center gap-2 mb-1"><div>{step.icon}</div><span className="font-semibold text-sm">{step.label}</span></div>
-                      <p className="text-xs text-muted-foreground">{step.desc}</p>
-                    </div>
-                    {i < 5 && <div className="flex justify-center py-1"><ArrowRight className="h-4 w-4 text-muted-foreground" /></div>}
-                  </div>
-                ))}
-              </div>
-            </CardContent></Card>
-            <Card><CardHeader className="pb-3"><CardTitle className="text-base">How Frontend Observation Works</CardTitle></CardHeader><CardContent className="text-sm space-y-3 text-muted-foreground">
-              <p>The <code className="text-emerald-400">tracedFetch()</code> utility wraps every browser <code className="text-blue-400">fetch()</code> call:</p>
-              <ol className="list-decimal list-inside space-y-1 pl-2">
-                <li>Records <b>clientSentAt</b> via <code className="text-cyan-400">performance.now()</code> before the request</li>
-                <li>Makes the actual <code className="text-blue-400">fetch()</code> call to the API</li>
-                <li>Reads the <code className="text-emerald-400">x-trace-id</code> response header set by the middleware</li>
-                <li>Measures <b>clientResponseTimeMs</b> = performance.now() - clientSentAt</li>
-                <li>POSTs all client-side timing to <code className="text-rose-400">/api/observability/frontend-beat</code></li>
-                <li>The beat endpoint looks up the matching server-side trace by trace ID</li>
-                <li>Returns a <b>correlated view</b> of the full Frontend &rarr; Network &rarr; MW &rarr; Handler &rarr; DB pipeline</li>
-              </ol>
-              <Separator />
-              <p className="text-xs">The &quot;Frontend Probe&quot; button fires 6 real browser requests and displays the correlated waterfall for each.</p>
-            </CardContent></Card>
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+        {/* Header */}
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <Link href="/"><Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground"><ArrowLeft className="mr-2 h-4 w-4" />Dashboard</Button></Link>
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary"><Activity className="h-5 w-5 text-white" /></div>
+            <div><h1 className="text-xl font-bold">E2E Observability</h1><p className="text-sm text-muted-foreground">Browser / Network / Server / Database correlated traces</p></div>
           </div>
-        </TabsContent>
-      </Tabs>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={clearAll}><Trash2 className="mr-1.5 h-3.5 w-3.5" />Clear</Button>
+            <Button variant="outline" size="sm" onClick={fetchSnapshot} disabled={loading}><RefreshCw className={"mr-1.5 h-3.5 w-3.5" + (loading ? " animate-spin" : "")} />Refresh</Button>
+            <Button size="sm" onClick={runProbes} disabled={probing}>{probing ? <div className="mr-1.5 h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <Play className="mr-1.5 h-3.5 w-3.5" />}Run Probes</Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {/* LEFT COLUMN */}
+          <div className="space-y-6 lg:col-span-1">
+            {/* Server Runtime */}
+            <Card className="border-border bg-card">
+              <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-sm"><Server className="h-4 w-4 text-blue-400" />Server Runtime</CardTitle></CardHeader>
+              <CardContent className="space-y-3 text-xs">
+                {data?.server ? (<>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Runtime</span><span className="font-mono">{data.server.runtime}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Platform</span><span className="font-mono">{data.server.platform}/{data.server.arch}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Uptime</span><span className="font-mono">{data.server.uptimeHuman}</span></div>
+                  <Separator className="bg-border" /><p className="text-muted-foreground">Memory</p>
+                  <div className="space-y-2">
+                    <div><div className="flex justify-between mb-1"><span className="text-muted-foreground">RSS</span><span>{data.server.memory.rssMb} MB</span></div><Progress value={Math.min(100, data.server.memory.rssMb / 5)} className="h-1.5" /></div>
+                    <div><div className="flex justify-between mb-1"><span className="text-muted-foreground">Heap Used</span><span>{data.server.memory.heapUsedMb} / {data.server.memory.heapTotalMb} MB</span></div><Progress value={data.server.memory.heapUtilPct} className="h-1.5" /></div>
+                  </div>
+                </>) : <p className="text-muted-foreground">No data</p>}
+              </CardContent>
+            </Card>
+
+            {/* Database */}
+            <Card className="border-border bg-card">
+              <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-sm"><Database className="h-4 w-4 text-green-400" />Database (SQLite)</CardTitle></CardHeader>
+              <CardContent className="space-y-3 text-xs">
+                {data?.database ? (<>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Status</span>
+                    <Badge variant="outline" className={data.database.status === 'connected' ? "bg-green-500/10 text-green-400 border-green-500/30 text-[10px]" : "bg-red-500/10 text-red-400 border-red-500/30 text-[10px]"}>
+                      {data.database.status === 'connected' ? <><CheckCircle2 className="mr-1 h-2.5 w-2.5" />Connected</> : <><XCircle className="mr-1 h-2.5 w-2.5" />Error</>}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Probe Latency</span><span className="font-mono">{data.database.latencyMs}ms</span></div>
+                  {data.database.dbSizeMb !== undefined && <div className="flex justify-between"><span className="text-muted-foreground">DB Size</span><span className="font-mono">{data.database.dbSizeMb} MB</span></div>}
+                  {data.database.tables && (<>
+                    <Separator className="bg-border" /><p className="text-muted-foreground">Table Counts</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {Object.entries(data.database.tables).map(([t, c]) => (<div key={t} className="flex justify-between rounded bg-muted/50 px-2 py-1"><span className="text-muted-foreground">{t}</span><span className="font-mono">{c as number}</span></div>))}
+                    </div>
+                  </>)}
+                </>) : <p className="text-muted-foreground">No data</p>}
+              </CardContent>
+            </Card>
+
+            {/* Browser Timing */}
+            <Card className="border-border bg-card">
+              <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-sm"><Monitor className="h-4 w-4 text-purple-400" />Browser Timing</CardTitle></CardHeader>
+              <CardContent className="space-y-2 text-xs">
+                <div className="flex justify-between"><span className="text-muted-foreground">DNS Lookup</span><span className="font-mono">{fmtMs(navTiming.dns || 0)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">TCP Connect</span><span className="font-mono">{fmtMs(navTiming.tcp || 0)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">TLS Handshake</span><span className="font-mono">{fmtMs(navTiming.tls || 0)}</span></div>
+                <Separator className="bg-border" />
+                <div className="flex justify-between"><span className="text-muted-foreground">TTFB</span><span className="font-mono font-medium text-foreground">{fmtMs(navTiming.ttfb || 0)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Content Download</span><span className="font-mono">{fmtMs(navTiming.contentDownload || 0)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">DOM Content Loaded</span><span className="font-mono">{fmtMs(navTiming.domContentLoaded || 0)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Full Load</span><span className="font-mono">{fmtMs(navTiming.fullLoad || 0)}</span></div>
+                <Separator className="bg-border" />
+                <div className="flex justify-between"><span className="text-muted-foreground">Resources Loaded</span><span className="font-mono">{navTiming.resourceCount || 0}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Transfer Size</span><span className="font-mono">{fmtBytes(navTiming.resourceTransferBytes || 0)}</span></div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* RIGHT COLUMN */}
+          <div className="space-y-6 lg:col-span-2">
+            {/* Aggregate Stats */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {data?.frontendStats && data.frontendStats.totalBeats > 0 ? (<>
+                <Card className="border-border bg-card p-3 text-center"><p className="text-lg font-bold text-foreground">{data.frontendStats.roundTrip.avgMs}<span className="text-xs text-muted-foreground">ms</span></p><p className="text-[10px] text-muted-foreground">Avg Round Trip</p></Card>
+                <Card className="border-border bg-card p-3 text-center"><p className="text-lg font-bold text-foreground">{data.frontendStats.roundTrip.p95Ms}<span className="text-xs text-muted-foreground">ms</span></p><p className="text-[10px] text-muted-foreground">P95 Round Trip</p></Card>
+                <Card className="border-border bg-card p-3 text-center"><p className="text-lg font-bold text-foreground">{data.frontendStats.ttfb.avgMs}<span className="text-xs text-muted-foreground">ms</span></p><p className="text-[10px] text-muted-foreground">Avg TTFB</p></Card>
+                <Card className="border-border bg-card p-3 text-center"><p className="text-lg font-bold text-foreground">{data.frontendStats.correlationPct}<span className="text-xs text-muted-foreground">%</span></p><p className="text-[10px] text-muted-foreground">Trace Correlation</p></Card>
+              </>) : (<Card className="border-border bg-card p-3 text-center col-span-2 sm:col-span-4"><p className="text-sm text-muted-foreground">Click Run Probes to capture browser-to-server-to-DB timings</p></Card>)}
+            </div>
+
+            {/* Probe Results */}
+            <Card className="border-border bg-card">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-sm"><Zap className="h-4 w-4 text-amber-400" />API Probes <Badge variant="outline" className="ml-2 text-[10px] border-border">{probeEndpoints.length}/{PROBE_ENDPOINTS.length}</Badge></CardTitle>
+                  {allOk && probeEndpoints.length > 0 && <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/30 text-[10px]">All OK</Badge>}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {probing && (<div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground"><div className="h-3 w-3 animate-spin rounded-full border-2 border-border border-t-foreground" />Probing {probeIndexRef.current}/{PROBE_ENDPOINTS.length} - {PROBE_ENDPOINTS[probeIndexRef.current]?.label}</div>)}
+                <div className="space-y-1.5">
+                  {PROBE_ENDPOINTS.map(ep => {
+                    const result = probeResults[ep.path]
+                    if (!result) return (
+                      <div key={ep.path} className="flex items-center gap-3 rounded-lg bg-muted/20 px-3 py-2 text-xs">
+                        <div className="h-2 w-2 rounded-full bg-muted-foreground/30" />
+                        <span className="flex-1 text-muted-foreground">{ep.label}</span>
+                        <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{ep.category}</Badge>
+                        <span className="text-muted-foreground w-16 text-right">-</span>
+                      </div>
+                    )
+                    return (
+                      <div key={ep.path} className="flex items-center gap-3 rounded-lg bg-muted/20 px-3 py-2 text-xs">
+                        <div className={result.ok ? "h-2 w-2 rounded-full bg-green-400" : "h-2 w-2 rounded-full bg-red-400"} />
+                        <span className="flex-1 text-foreground truncate">{ep.label}</span>
+                        <Badge variant="outline" className="text-[10px] border-border">{ep.category}</Badge>
+                        <span className={"text-xs font-mono w-8 text-right " + statusColor(result.status)}>{result.status}</span>
+                        <span className="text-muted-foreground w-16 text-right font-mono">{fmtMs(result.latencyMs)}</span>
+                        <div className="w-20"><div className="h-1.5 rounded-full bg-muted overflow-hidden"><div className={result.ok ? "h-full rounded-full bg-green-400" : "h-full rounded-full bg-red-400"} style={{ width: Math.min(100, (result.latencyMs / maxLatency) * 100) + '%' }} /></div></div>
+                        <span className="text-muted-foreground w-14 text-right font-mono">{fmtBytes(result.size)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Correlated Waterfall */}
+            <Card className="border-border bg-card">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-sm"><Layers className="h-4 w-4 text-cyan-400" />Correlated Waterfall <Badge variant="outline" className="ml-2 text-[10px] border-border">{data?.correlated?.length || 0}</Badge></CardTitle>
+                <CardDescription className="text-xs">Frontend round-trip broken down: network latency + server handler + database time</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {(!data?.correlated || data.correlated.length === 0) ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-muted-foreground"><Eye className="mb-2 h-8 w-8 opacity-30" /><p className="text-sm">No correlated traces yet</p><p className="text-xs">Run probes to generate waterfall data</p></div>
+                ) : (
+                  <ScrollArea className="max-h-[500px]">
+                    <div className="space-y-2">
+                      {data.correlated.map(c => {
+                        const expanded = expandedWaterfall === c.traceId
+                        const wfMax = Math.max(c.waterfall.networkMs, c.waterfall.serverHandlerMs + c.waterfall.databaseMs, 1)
+                        const handlerOnly = c.waterfall.serverHandlerMs - c.waterfall.databaseMs
+                        return (
+                          <div key={c.traceId} className="rounded-lg border border-border bg-muted/20">
+                            <button onClick={() => setExpandedWaterfall(expanded ? null : c.traceId)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/40 transition-colors">
+                              <ChevronRight className={"h-3.5 w-3.5 text-muted-foreground transition-transform" + (expanded ? " rotate-90" : "")} />
+                              <Badge variant="outline" className="text-[10px] font-mono border-border w-8 justify-center">{c.method}</Badge>
+                              <span className="flex-1 text-xs font-mono text-foreground truncate">{c.path}</span>
+                              <span className={"text-xs font-mono w-8 text-right " + statusColor(c.status.client)}>{c.status.client}</span>
+                              <span className="text-xs font-mono text-foreground font-medium w-16 text-right">{fmtMs(c.totals.roundTripMs)}</span>
+                            </button>
+                            {expanded && (
+                              <div className="border-t border-border px-3 py-3 space-y-2">
+                                <div className="flex gap-0.5 h-6 rounded overflow-hidden bg-muted">
+                                  <div className="bg-blue-500/60 flex items-center justify-center" style={{ width: wfBarWidth(c.waterfall.networkMs, wfMax) }}><span className="text-[9px] font-mono text-white px-1">{fmtMs(c.waterfall.networkMs)}</span></div>
+                                  <div className="bg-amber-500/60 flex items-center justify-center" style={{ width: wfBarWidth(handlerOnly, wfMax) }}><span className="text-[9px] font-mono text-white px-1">{fmtMs(handlerOnly)}</span></div>
+                                  <div className="bg-green-500/60 flex items-center justify-center" style={{ width: wfBarWidth(c.waterfall.databaseMs, wfMax) }}><span className="text-[9px] font-mono text-white px-1">{fmtMs(c.waterfall.databaseMs)}</span></div>
+                                </div>
+                                <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+                                  <span className="flex items-center gap-1"><span className="h-2 w-3 rounded bg-blue-500/60" />Network</span>
+                                  <span className="flex items-center gap-1"><span className="h-2 w-3 rounded bg-amber-500/60" />Server Handler</span>
+                                  <span className="flex items-center gap-1"><span className="h-2 w-3 rounded bg-green-500/60" />Database ({c.waterfall.dbQueries} queries)</span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2 text-xs mt-1">
+                                  <div className="rounded bg-muted/50 p-2 text-center"><p className="text-muted-foreground">Network</p><p className="font-mono font-medium">{fmtMs(c.waterfall.networkMs)}</p></div>
+                                  <div className="rounded bg-muted/50 p-2 text-center"><p className="text-muted-foreground">Server</p><p className="font-mono font-medium">{fmtMs(c.totals.serverTotalMs)}</p></div>
+                                  <div className="rounded bg-muted/50 p-2 text-center"><p className="text-muted-foreground">DB</p><p className="font-mono font-medium">{fmtMs(c.waterfall.databaseMs)}</p></div>
+                                </div>
+                                <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1">
+                                  <span>Response: {fmtBytes(c.responseSize)}</span><span>{timeAgo(c.timestamp)}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </ScrollArea>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
