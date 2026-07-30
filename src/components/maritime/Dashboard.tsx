@@ -21,6 +21,9 @@ import ESGPanel from './ESGPanel'
 import { ExportButtons } from './DataExport'
 import CommandPalette from './CommandPalette'
 import NotificationCenter from './NotificationCenter'
+import UserBar from './UserBar'
+import { useAuth } from '@/hooks/useAuth'
+import { hasPermission, type Resource, type Action } from '@/lib/auth/rbac'
 const VoyageAnalyticsPanel = dynamic(() => import('./VoyageAnalyticsPanel'), { ssr: false })
 const StateMachinePanel = dynamic(() => import('./StateMachinePanel'), { ssr: false })
 const DocumentWorkflowPanel = dynamic(() => import('./DocumentWorkflowPanel'), { ssr: false })
@@ -1861,6 +1864,37 @@ export default function MaritimeDashboard() {
   const [commandOpen, setCommandOpen] = useState(false)
   const { theme, setTheme } = useTheme()
   const darkMode = theme === 'dark'
+  const { role: userRole, isAuthenticated } = useAuth()
+
+  // RBAC: which tabs are visible for the current role
+  // Tabs without a resource are always visible (core navigation)
+  const tabPermissions: Record<string, { resource?: string; action?: 'view' | 'create' | 'edit' }> = {
+    'overview': {}, 'map': {}, 'analytics': {}, 'shipments': {}, 'vessels': {},
+    'trade': {}, 'ports': {}, 'containers': {}, 'alerts': {},
+    'carriers': { resource: 'carriers', action: 'view' },
+    'charters': { resource: 'charters', action: 'view' },
+    'bookings': { resource: 'bookings', action: 'view' },
+    'compliance': { resource: 'compliance', action: 'view' },
+    'esg': { resource: 'esg', action: 'view' },
+    'voyage': { resource: 'shipments', action: 'view' },
+    'state-machine': { resource: 'state-machine', action: 'view' },
+    'workflows': { resource: 'workflows', action: 'view' },
+    'ebl': { resource: 'documents', action: 'view' },
+    'payments': { resource: 'documents', action: 'view' },
+    'iot': { resource: 'dashboard', action: 'view' },
+    'port-twin': { resource: 'ports', action: 'view' },
+  }
+  const visibleTabs = Object.entries(tabPermissions).filter(([_, perm]) => {
+    if (!perm.resource) return true
+    return hasPermission(userRole, perm.resource as Resource, (perm.action || 'view') as Action)
+  }).map(([tab]) => tab)
+
+  // If active tab is hidden by RBAC, snap to first visible tab
+  useEffect(() => {
+    if (visibleTabs.length > 0 && !visibleTabs.includes(activeTab)) {
+      setActiveTab(visibleTabs[0])
+    }
+  }, [visibleTabs, activeTab])
 
   useEffect(() => {
     fetch('/api/dashboard')
@@ -1928,6 +1962,7 @@ export default function MaritimeDashboard() {
             >
               {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
+            <UserBar />
           </div>
         </div>
       </header>
@@ -1939,90 +1974,27 @@ export default function MaritimeDashboard() {
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className='mb-6 flex w-full flex-wrap gap-1 bg-muted'>
-              <TabsTrigger value="overview" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <BarChart3 className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Overview</span>
-              </TabsTrigger>
-              <TabsTrigger value="map" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <Globe className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Live Map</span>
-              </TabsTrigger>
-              <TabsTrigger value="analytics" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <TrendingUp className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Analytics</span>
-              </TabsTrigger>
-              <TabsTrigger value="shipments" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <Package className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Shipments</span>
-              </TabsTrigger>
-              <TabsTrigger value="vessels" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <Ship className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Vessels</span>
-              </TabsTrigger>
-              <TabsTrigger value="trade" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <TrendingUp className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Trade</span>
-              </TabsTrigger>
-              <TabsTrigger value="ports" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <Anchor className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Ports</span>
-              </TabsTrigger>
-              <TabsTrigger value="containers" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <Container className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Containers</span>
-              </TabsTrigger>
-              <TabsTrigger value="carriers" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <Handshake className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Carriers</span>
-              </TabsTrigger>
-              <TabsTrigger value="charters" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <Gauge className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Charters</span>
-              </TabsTrigger>
-              <TabsTrigger value="bookings" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <BookOpen className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Bookings</span>
-              </TabsTrigger>
-              <TabsTrigger value="compliance" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <Shield className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Compliance</span>
-              </TabsTrigger>
-              <TabsTrigger value="esg" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <Leaf className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">ESG</span>
-              </TabsTrigger>
-              <TabsTrigger value="voyage" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <Navigation className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Voyage</span>
-              </TabsTrigger>
-              <TabsTrigger value="alerts" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <Bell className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Alerts</span>
-              </TabsTrigger>
-              <TabsTrigger value="state-machine" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <GitBranch className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">State Machine</span>
-              </TabsTrigger>
-              <TabsTrigger value="workflows" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <ClipboardCheck className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Workflows</span>
-              </TabsTrigger>
-              <TabsTrigger value="ebl" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <FileText className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">eBL</span>
-              </TabsTrigger>
-              <TabsTrigger value="payments" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <DollarSign className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Payments</span>
-              </TabsTrigger>
-              <TabsTrigger value="iot" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <Thermometer className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">IoT</span>
-              </TabsTrigger>
-              <TabsTrigger value="port-twin" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                <Building className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Port Ops</span>
-              </TabsTrigger>
+              {visibleTabs.includes('overview') && <TabsTrigger value="overview" className="flex items-center gap-1.5 text-xs sm:text-sm"><BarChart3 className="h-3.5 w-3.5" /><span className="hidden sm:inline">Overview</span></TabsTrigger>}
+              {visibleTabs.includes('map') && <TabsTrigger value="map" className="flex items-center gap-1.5 text-xs sm:text-sm"><Globe className="h-3.5 w-3.5" /><span className="hidden sm:inline">Live Map</span></TabsTrigger>}
+              {visibleTabs.includes('analytics') && <TabsTrigger value="analytics" className="flex items-center gap-1.5 text-xs sm:text-sm"><TrendingUp className="h-3.5 w-3.5" /><span className="hidden sm:inline">Analytics</span></TabsTrigger>}
+              {visibleTabs.includes('shipments') && <TabsTrigger value="shipments" className="flex items-center gap-1.5 text-xs sm:text-sm"><Package className="h-3.5 w-3.5" /><span className="hidden sm:inline">Shipments</span></TabsTrigger>}
+              {visibleTabs.includes('vessels') && <TabsTrigger value="vessels" className="flex items-center gap-1.5 text-xs sm:text-sm"><Ship className="h-3.5 w-3.5" /><span className="hidden sm:inline">Vessels</span></TabsTrigger>}
+              {visibleTabs.includes('trade') && <TabsTrigger value="trade" className="flex items-center gap-1.5 text-xs sm:text-sm"><TrendingUp className="h-3.5 w-3.5" /><span className="hidden sm:inline">Trade</span></TabsTrigger>}
+              {visibleTabs.includes('ports') && <TabsTrigger value="ports" className="flex items-center gap-1.5 text-xs sm:text-sm"><Anchor className="h-3.5 w-3.5" /><span className="hidden sm:inline">Ports</span></TabsTrigger>}
+              {visibleTabs.includes('containers') && <TabsTrigger value="containers" className="flex items-center gap-1.5 text-xs sm:text-sm"><Container className="h-3.5 w-3.5" /><span className="hidden sm:inline">Containers</span></TabsTrigger>}
+              {visibleTabs.includes('carriers') && <TabsTrigger value="carriers" className="flex items-center gap-1.5 text-xs sm:text-sm"><Handshake className="h-3.5 w-3.5" /><span className="hidden sm:inline">Carriers</span></TabsTrigger>}
+              {visibleTabs.includes('charters') && <TabsTrigger value="charters" className="flex items-center gap-1.5 text-xs sm:text-sm"><Gauge className="h-3.5 w-3.5" /><span className="hidden sm:inline">Charters</span></TabsTrigger>}
+              {visibleTabs.includes('bookings') && <TabsTrigger value="bookings" className="flex items-center gap-1.5 text-xs sm:text-sm"><BookOpen className="h-3.5 w-3.5" /><span className="hidden sm:inline">Bookings</span></TabsTrigger>}
+              {visibleTabs.includes('compliance') && <TabsTrigger value="compliance" className="flex items-center gap-1.5 text-xs sm:text-sm"><Shield className="h-3.5 w-3.5" /><span className="hidden sm:inline">Compliance</span></TabsTrigger>}
+              {visibleTabs.includes('esg') && <TabsTrigger value="esg" className="flex items-center gap-1.5 text-xs sm:text-sm"><Leaf className="h-3.5 w-3.5" /><span className="hidden sm:inline">ESG</span></TabsTrigger>}
+              {visibleTabs.includes('voyage') && <TabsTrigger value="voyage" className="flex items-center gap-1.5 text-xs sm:text-sm"><Navigation className="h-3.5 w-3.5" /><span className="hidden sm:inline">Voyage</span></TabsTrigger>}
+              {visibleTabs.includes('alerts') && <TabsTrigger value="alerts" className="flex items-center gap-1.5 text-xs sm:text-sm"><Bell className="h-3.5 w-3.5" /><span className="hidden sm:inline">Alerts</span></TabsTrigger>}
+              {visibleTabs.includes('state-machine') && <TabsTrigger value="state-machine" className="flex items-center gap-1.5 text-xs sm:text-sm"><GitBranch className="h-3.5 w-3.5" /><span className="hidden sm:inline">State Machine</span></TabsTrigger>}
+              {visibleTabs.includes('workflows') && <TabsTrigger value="workflows" className="flex items-center gap-1.5 text-xs sm:text-sm"><ClipboardCheck className="h-3.5 w-3.5" /><span className="hidden sm:inline">Workflows</span></TabsTrigger>}
+              {visibleTabs.includes('ebl') && <TabsTrigger value="ebl" className="flex items-center gap-1.5 text-xs sm:text-sm"><FileText className="h-3.5 w-3.5" /><span className="hidden sm:inline">eBL</span></TabsTrigger>}
+              {visibleTabs.includes('payments') && <TabsTrigger value="payments" className="flex items-center gap-1.5 text-xs sm:text-sm"><DollarSign className="h-3.5 w-3.5" /><span className="hidden sm:inline">Payments</span></TabsTrigger>}
+              {visibleTabs.includes('iot') && <TabsTrigger value="iot" className="flex items-center gap-1.5 text-xs sm:text-sm"><Thermometer className="h-3.5 w-3.5" /><span className="hidden sm:inline">IoT</span></TabsTrigger>}
+              {visibleTabs.includes('port-twin') && <TabsTrigger value="port-twin" className="flex items-center gap-1.5 text-xs sm:text-sm"><Building className="h-3.5 w-3.5" /><span className="hidden sm:inline">Port Ops</span></TabsTrigger>}
             </TabsList>
 
             <TabsContent value="overview">

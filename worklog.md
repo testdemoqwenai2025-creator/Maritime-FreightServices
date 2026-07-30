@@ -125,6 +125,32 @@ Stage Summary:
 - Build: 0 errors, all routes compile cleanly
 
 ---
+Task ID: 4
+Agent: Main Agent
+Task: Phase 6 Sprint 1 Completion — Auth & RBAC integration, UserBar, User Management, RBAC tab filtering
+
+Work Log:
+- Assessed existing Sprint 1 infrastructure: NextAuth v4 with JWT, 7 RBAC roles, permission matrix, session helpers, workflow APIs, login page — all pre-built in earlier tasks
+- Fixed login page demo account credentials to match seed-phase6.ts (passwords were different)
+- Added 7th demo account (Viewer role) to login page
+- Ran seed-phase6.ts: 7 users, 4 documents, 4 workflows created successfully
+- Created /api/audit-log/route.ts — paginated audit trail endpoint with filtering
+- Created src/hooks/useAuth.ts — typed React hook wrapping next-auth useSession with role, permissions, can(), meetsRole(), signOut()
+- Created src/components/maritime/UserBar.tsx — dropdown user bar with avatar, role badge, org, permissions, sign out
+- Created /admin/users/page.tsx — User Management page with role distribution, user table, create user dialog
+- Integrated UserBar into Dashboard.tsx header
+- Added RBAC-aware tab filtering to Dashboard (20 tabs with visibility checks)
+- Build: 0 errors, 50 routes compiled
+
+Stage Summary:
+- Auth Flow: Login (/login) → JWT session → UserBar → role-aware experience
+- RBAC: 7 roles, 17 resources, 6 actions, tab-level visibility filtering
+- User Management: /admin/users — Admin creates, Manager+ views
+- Audit Trail: /api/audit-log — immutable log with filtering
+- 7 Demo Accounts seeded across all roles
+- Preview URL: https://preview-ghpc.space-z.ai/
+
+---
 Task ID: 3
 Agent: Main Agent
 Task: Phase 6 Sprint 2 — Digital Supply Chain (eBL, Payments, IoT, Port Digital Twin)

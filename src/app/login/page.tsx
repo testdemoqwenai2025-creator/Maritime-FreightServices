@@ -10,12 +10,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 const DEMO_ACCOUNTS = [
-  { email: 'admin@maritime.io', password: 'admin123', role: 'Admin', org: 'Maritime Platform', color: 'text-red-400' },
-  { email: 'manager@globalship.com', password: 'manager123', role: 'Manager', org: 'Global Shipping Co', color: 'text-purple-400' },
-  { email: 'customs@customs.gov', password: 'customs123', role: 'Customs', org: 'Port Customs Authority', color: 'text-amber-400' },
-  { email: 'ops@maersk.com', password: 'carrier123', role: 'Carrier', org: 'Maersk Line', color: 'text-blue-400' },
-  { email: 'terminal@rotterdam.nl', password: 'terminal123', role: 'Terminal', org: 'Rotterdam Port Authority', color: 'text-green-400' },
-  { email: 'shipper@trading.com', password: 'shipper123', role: 'Shipper', org: 'Pacific Trading Ltd', color: 'text-cyan-400' },
+  { email: 'admin@maritime.io', password: 'Admin123!', role: 'Admin', org: 'Maritime Platform', color: 'text-red-400' },
+  { email: 'manager@maritime.io', password: 'Manager123!', role: 'Manager', org: 'Maritime Platform', color: 'text-purple-400' },
+  { email: 'customs@gov.uk', password: 'Customs123!', role: 'Customs', org: 'HMRC Customs', color: 'text-amber-400' },
+  { email: 'carrier@maersk.com', password: 'Carrier123!', role: 'Carrier', org: 'Maersk Line', color: 'text-blue-400' },
+  { email: 'terminal@feligandu.com', password: 'Terminal123!', role: 'Terminal', org: 'Feligandu Terminal', color: 'text-green-400' },
+  { email: 'shipper@acme.com', password: 'Shipper123!', role: 'Shipper', org: 'ACME Trading Co', color: 'text-cyan-400' },
+  { email: 'viewer@maritime.io', password: 'Viewer123!', role: 'Viewer', org: 'External Partner', color: 'text-gray-400' },
 ]
 
 export default function LoginPage() {
@@ -138,7 +139,7 @@ export default function LoginPage() {
             <CardDescription className="text-xs">Click to auto-fill credentials</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {DEMO_ACCOUNTS.map(account => (
                 <button
                   key={account.email}
