@@ -91,3 +91,35 @@ Stage Summary:
 - Backend: 7 users seeded, 4 workflows active, audit trail working
 - Frontend: 5-tab live dashboard showing all Sprint 1 components communicating
 - Preview URL: https://preview-ghpc.space-z.ai/phase6-preview
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Create /preview full-stack diagnostics page for connectivity verification
+
+Work Log:
+- Read worklog and assessed project state — previous /phase6-preview existed but user wanted dedicated /preview
+- Created /api/health/detailed/route.ts — server-side deep diagnostics probing 7 layers:
+  - Database (Prisma/SQLite): counts across 8 tables
+  - State Machine Engine: imports statechart, engine, probabilistic modules; validates transitions + Monte Carlo
+  - Server Runtime: Node version, platform, uptime, heap/RSS memory
+  - File System: schema.prisma existence + size, dev.db existence
+  - API Layer: checks 11 route handler files exist on disk
+  - Middleware Layer: checks middleware.ts active vs .bak status
+  - Auth/RBAC: dynamically imports rbac module, validates hasPermission + checkApiAccess
+- Created /preview/page.tsx — full-stack diagnostics frontend:
+  - Probes 11 backend API endpoints from browser (systems, health, vessels, ports, shipments, containers, analytics, trade-data, state-machine/definition, search, health/detailed)
+  - 5 browser environment checks (JS Runtime, Fetch API, Session Storage, Performance API, WebSocket)
+  - 7-layer visual architecture diagram (Browser → Middleware → API → State Machine → Database → Server → System)
+  - Server-side deep diagnostics panel consuming /api/health/detailed
+  - Expandable JSON detail panels per endpoint (hover to reveal chevron)
+  - Live clock, re-run button, aggregate status banner (All Systems / Partial / Running)
+- Fixed pre-existing build error: ROLE_LEVEL not exported from rbac.ts but re-exported in auth/index.ts
+- Build: 0 errors, /preview route verified in route listing
+- Pushed to GitHub as commit d175d95
+
+Stage Summary:
+- Preview URL: https://preview-ghpc.space-z.ai/preview
+- Backend: /api/health/detailed returns 7-layer server-side diagnostics
+- Frontend: 11 API endpoints + 5 browser checks + 7-layer diagram + server diagnostics panel
+- Build: 0 errors, all routes compile cleanly
