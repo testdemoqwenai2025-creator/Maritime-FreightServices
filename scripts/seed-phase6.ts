@@ -1,6 +1,6 @@
 /**
- * Phase 6 Seed Script — Demo users, document workflows, and audit logs
- * Run: bun run scripts/seed-phase6.ts
+ * Seed script for Phase 6 Sprint 1 — creates demo users, documents, and workflows.
+ * Run: npx tsx scripts/seed-phase6.ts
  */
 
 import { PrismaClient } from '@prisma/client'
@@ -9,153 +9,155 @@ import { hashPassword } from '../src/lib/auth/password'
 const prisma = new PrismaClient()
 
 async function main() {
-  console.log('Seeding Phase 6: Digital Supply Chain...')
+  console.log('Seeding Phase 6 Sprint 1 data...')
 
-  // ─── 1. Demo Users ──────────────────────────────────────────────
-  console.log('  Creating demo users...')
-
+  // ── 1. Create demo users across all 7 roles ──
   const users = [
-    { email: 'admin@maritime.io', name: 'Platform Admin', password: 'admin123', role: 'Admin', organization: 'Maritime Platform', actorType: 'Internal' },
-    { email: 'manager@globalship.com', name: 'Sarah Chen', password: 'manager123', role: 'Manager', organization: 'Global Shipping Co', actorType: 'Internal' },
-    { email: 'customs@customs.gov', name: 'James Okonkwo', password: 'customs123', role: 'Customs', organization: 'Port Customs Authority', actorType: 'CustomsBroker' },
-    { email: 'ops@maersk.com', name: 'Lars Nielsen', password: 'carrier123', role: 'Carrier', organization: 'Maersk Line', actorType: 'Carrier' },
-    { email: 'terminal@rotterdam.nl', name: 'Anna de Vries', password: 'terminal123', role: 'Terminal', organization: 'Rotterdam Port Authority', actorType: 'TerminalOperator' },
-    { email: 'shipper@trading.com', name: 'Wei Zhang', password: 'shipper123', role: 'Shipper', organization: 'Pacific Trading Ltd', actorType: 'Shipper' },
+    { email: 'admin@maritime.io', name: 'System Admin', role: 'Admin', organization: 'Maritime Platform', actorType: 'Internal', password: 'Admin123!' },
+    { email: 'manager@maritime.io', name: 'Operations Manager', role: 'Manager', organization: 'Maritime Platform', actorType: 'Internal', password: 'Manager123!' },
+    { email: 'customs@gov.uk', name: 'James Clarke', role: 'Customs', organization: 'HMRC Customs', actorType: 'CustomsBroker', password: 'Customs123!' },
+    { email: 'carrier@maersk.com', name: 'Sofia Nielsen', role: 'Carrier', organization: 'Maersk Line', actorType: 'Carrier', password: 'Carrier123!' },
+    { email: 'terminal@feligandu.com', name: 'Ahmed Hassan', role: 'Terminal', organization: 'Feligandu Terminal', actorType: 'TerminalOperator', password: 'Terminal123!' },
+    { email: 'shipper@acme.com', name: 'Maria Santos', role: 'Shipper', organization: 'ACME Trading Co', actorType: 'Shipper', password: 'Shipper123!' },
+    { email: 'viewer@maritime.io', name: 'Guest User', role: 'Viewer', organization: 'External Partner', actorType: 'Internal', password: 'Viewer123!' },
   ]
+
+  const createdUsers: Record<string, { id: string; email: string; role: string }> = {}
 
   for (const u of users) {
-    const existing = await prisma.user.findUnique({ where: { email: u.email } })
-    if (!existing) {
-      const passwordHash = await hashPassword(u.password)
-      const { password: _pw, ...userData } = u
-      await prisma.user.create({
-        data: { ...userData, passwordHash },
-      })
-      console.log(`    Created user: ${u.email} (${u.role})`)
-    } else {
-      console.log(`    User exists: ${u.email}`)
-    }
+    const passwordHash = await hashPassword(u.password)
+    const user = await prisma.user.upsert({
+      where: { email: u.email },
+      update: {},
+      create: { email: u.email, name: u.name, role: u.role, organization: u.organization, actorType: u.actorType, passwordHash },
+      select: { id: true, email: true, role: true },
+    })
+    createdUsers[u.role] = user
+    console.log(`  User: ${u.email} (${u.role})`)
   }
 
-  // ─── 2. Document Workflows ──────────────────────────────────────
-  console.log('  Creating document workflows...')
+  // ── 2. Ensure we have at least one shipment and document to attach workflows to ──
+  const vessel = await prisma.vessel.findFirst() || await prisma.vessel.create({
+    data: { name: 'MV Atlantic Star', mmsi: 636091789, vesselType: 'Container Ship', flagCountry: 'Panama', status: 'Active' },
+  })
 
-  // Get some existing documents to create workflows for
-  const documents = await prisma.shipmentDocument.findMany({ take: 20 })
-  const allUsers = await prisma.user.findMany()
-  const adminUser = allUsers.find(u => u.role === 'Admin')!
-  const managerUser = allUsers.find(u => u.role === 'Manager')!
-  const customsUser = allUsers.find(u => u.role === 'Customs')!
+  const originPort = await prisma.port.findFirst() || await prisma.port.create({
+    data: { name: 'Shanghai', countryCode: 'CN', region: 'East Asia', latitude: 31.23, longitude: 121.47 },
+  })
 
-  const workflowConfigs = [
-    { type: 'Standard', priority: 'Normal', steps: ['Submitted', 'UnderReview', 'Approved'], assignTo: managerUser },
-    { type: 'Compliance', priority: 'High', steps: ['Submitted', 'UnderReview'], assignTo: customsUser },
-    { type: 'Expedited', priority: 'Urgent', steps: ['Submitted', 'UnderReview', 'Approved'], assignTo: managerUser },
-    { type: 'Financial', priority: 'Normal', steps: ['Submitted'], assignTo: null },
-    { type: 'Standard', priority: 'Low', steps: ['Submitted', 'UnderReview', 'Rejected'], assignTo: adminUser },
-    { type: 'Compliance', priority: 'High', steps: ['Submitted', 'UnderReview', 'Approved', 'Archived'], assignTo: customsUser },
-    { type: 'Standard', priority: 'Normal', steps: ['Submitted', 'UnderReview'], assignTo: null },
-    { type: 'Expedited', priority: 'Urgent', steps: ['Submitted', 'UnderReview', 'Approved'], assignTo: adminUser },
-  ]
+  const destPort = await prisma.port.findFirst({ where: { id: { not: originPort.id } } }) || await prisma.port.create({
+    data: { name: 'Rotterdam', countryCode: 'NL', region: 'Europe', latitude: 51.92, longitude: 4.48 },
+  })
 
-  for (let i = 0; i < Math.min(documents.length, workflowConfigs.length); i++) {
-    const doc = documents[i]
-    const config = workflowConfigs[i]
+  const shipment = await prisma.shipment.findFirst() || await prisma.shipment.create({
+    data: {
+      vesselId: vessel.id, originPortId: originPort.id, destPortId: destPort.id,
+      status: 'In Transit', cargoType: 'Electronics', cargoWeight: 12500, cargoDesc: 'Consumer electronics',
+      shipper: 'ACME Trading Co', consignee: 'Euro Retail BV', freightCost: 28500, currency: 'USD',
+    },
+  })
 
-    // Check if workflow already exists
-    const existing = await prisma.documentWorkflow.findUnique({ where: { documentId: doc.id } })
-    if (existing) {
-      console.log(`    Workflow exists for document ${doc.id}`)
-      continue
-    }
+  // ── 3. Create documents for the shipment ──
+  const docTypes = ['BOL', 'Commercial Invoice', 'Packing List', 'Customs Declaration']
+  const docs = []
 
-    // Determine required role based on workflow type
-    const requiredRole = config.type === 'Compliance' ? 'Customs' : config.type === 'Financial' ? 'Manager' : 'Admin'
-
-    // Create the workflow
-    const slaDeadline = new Date(Date.now() + (config.priority === 'Urgent' ? 4 : config.priority === 'High' ? 24 : 48) * 60 * 60 * 1000)
-
-    const workflow = await prisma.documentWorkflow.create({
-      data: {
-        documentId: doc.id,
-        workflowType: config.type,
-        priority: config.priority,
-        currentStep: config.steps[config.steps.length - 1], // final step
-        requiredRole,
-        assignedToId: config.assignTo?.id || null,
-        submittedAt: new Date(Date.now() - Math.random() * 48 * 60 * 60 * 1000),
-        reviewedAt: config.steps.includes('UnderReview') || config.steps.includes('Approved')
-          ? new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000) : null,
-        completedAt: config.steps.includes('Approved') || config.steps.includes('Archived')
-          ? new Date(Date.now() - Math.random() * 12 * 60 * 60 * 1000) : null,
-        slaDeadline,
-        slaBreached: config.priority === 'Low' && Math.random() > 0.5, // some low-priority ones breached
-        rejectionReason: config.steps.includes('Rejected') ? 'Missing certificate of origin. Please resubmit with complete documentation.' : null,
+  for (const docType of docTypes) {
+    const doc = await prisma.shipmentDocument.upsert({
+      where: { id: `${docType}-${shipment.id}` },
+      update: {},
+      create: {
+        id: `${docType}-${shipment.id}`,
+        shipmentId: shipment.id,
+        vesselId: vessel.id,
+        docType,
+        docName: `${docType} - ${shipment.bookingRef || 'SHP001'}`,
+        status: 'Pending',
+        issuedBy: createdUsers.Shipper?.email || 'shipper@acme.com',
+        issuedAt: new Date(),
+        fileFormat: 'PDF',
       },
     })
+    docs.push(doc)
+    console.log(`  Document: ${doc.docType} (${doc.status})`)
+  }
 
-    // Create action history for each step transition
-    let prevStep = 'Draft'
-    const actors = [adminUser, config.assignTo, customsUser].filter(Boolean) as typeof allUsers
+  // ── 4. Create document workflows with different states ──
+  const workflowConfigs = [
+    { docIndex: 0, step: 'Approved', workflowType: 'Standard', priority: 'Normal' },
+    { docIndex: 1, step: 'UnderReview', workflowType: 'Financial', priority: 'High' },
+    { docIndex: 2, step: 'Submitted', workflowType: 'Standard', priority: 'Normal' },
+    { docIndex: 3, step: 'Draft', workflowType: 'Compliance', priority: 'Urgent' },
+  ]
 
-    for (const step of config.steps) {
-      const actor = actors[Math.floor(Math.random() * actors.length)]
-      const actionName = step === 'Approved' ? 'Approved' : step === 'Rejected' ? 'Rejected' : step === 'Archived' ? 'Archived' : step === 'UnderReview' ? 'Reviewed' : 'Submitted'
+  for (const config of workflowConfigs) {
+    const doc = docs[config.docIndex]
+    const slaDeadline = new Date(Date.now() + 48 * 60 * 60 * 1000)
+    if (config.step === 'Draft') slaDeadline.setDate(slaDeadline.getDate() - 1) // Create a breached SLA
 
+    const workflow = await prisma.documentWorkflow.upsert({
+      where: { documentId: doc.id },
+      update: {},
+      create: {
+        documentId: doc.id,
+        workflowType: config.workflowType,
+        currentStep: config.step,
+        priority: config.priority,
+        requiredRole: config.workflowType === 'Compliance' ? 'Customs' : 'Admin',
+        assignedToId: createdUsers.Admin?.id,
+        submittedAt: config.step !== 'Draft' ? new Date() : null,
+        reviewedAt: ['UnderReview', 'Approved'].includes(config.step) ? new Date() : null,
+        completedAt: config.step === 'Approved' ? new Date() : null,
+        slaDeadline,
+        slaBreached: slaDeadline < new Date(),
+      },
+    })
+    console.log(`  Workflow: ${doc.docType} -> ${config.step} (${config.priority})`)
+
+    // ── 5. Create workflow action history ──
+    const transitions: Array<{ action: string; from: string; to: string; by: string }> = []
+    if (config.step === 'Approved') {
+      transitions.push(
+        { action: 'Submitted', from: 'Draft', to: 'Submitted', by: 'Shipper' },
+        { action: 'Reviewed', from: 'Submitted', to: 'UnderReview', by: 'Manager' },
+        { action: 'Approved', from: 'UnderReview', to: 'Approved', by: 'Admin' },
+      )
+    } else if (config.step === 'UnderReview') {
+      transitions.push(
+        { action: 'Submitted', from: 'Draft', to: 'Submitted', by: 'Shipper' },
+        { action: 'Reviewed', from: 'Submitted', to: 'UnderReview', by: 'Manager' },
+      )
+    } else if (config.step === 'Submitted') {
+      transitions.push(
+        { action: 'Submitted', from: 'Draft', to: 'Submitted', by: 'Shipper' },
+      )
+    }
+
+    for (const t of transitions) {
       await prisma.documentWorkflowAction.create({
         data: {
           workflowId: workflow.id,
-          action: actionName,
-          fromStep: prevStep,
-          toStep: step,
-          performedBy: actor.id,
-          actorRole: actor.role,
-          comment: step === 'Rejected' ? 'Missing certificate of origin' : step === 'Approved' ? 'All documents in order' : null,
-          createdAt: new Date(Date.now() - Math.random() * 48 * 60 * 60 * 1000),
+          action: t.action,
+          fromStep: t.from,
+          toStep: t.to,
+          performedBy: createdUsers[t.by]?.id || createdUsers.Admin!.id,
+          actorRole: t.by,
+          comment: `Auto-seed: ${t.action} transition`,
         },
       })
-      prevStep = step
     }
-
-    // Update document status based on final step
-    const finalStep = config.steps[config.steps.length - 1]
-    await prisma.shipmentDocument.update({
-      where: { id: doc.id },
-      data: { status: finalStep === 'Approved' || finalStep === 'Archived' ? 'Approved' : finalStep === 'Rejected' ? 'Rejected' : 'Pending' },
-    })
-
-    console.log(`    Created workflow: ${doc.docType} → ${finalStep} (${config.type}/${config.priority})`)
   }
 
-  // ─── 3. Sample Audit Logs ────────────────────────────────────────
-  console.log('  Creating audit logs...')
+  // ── 6. Add audit log entries ──
+  await prisma.auditLog.createMany({
+    data: [
+      { userId: createdUsers.Admin?.id, userRole: 'Admin', userOrg: 'Maritime Platform', action: 'user.create', resource: 'User', details: '{"count":7}' },
+      { userId: createdUsers.Shipper?.id, userRole: 'Shipper', userOrg: 'ACME Trading Co', action: 'document.submit', resource: 'Document', details: '{"docType":"BOL"}' },
+      { userId: createdUsers.Manager?.id, userRole: 'Manager', userOrg: 'Maritime Platform', action: 'workflow.create', resource: 'DocumentWorkflow', details: '{"count":4}' },
+    ],
+  })
 
-  const auditEntries = [
-    { userId: adminUser.id, userRole: 'Admin', action: 'login', resource: 'Auth' },
-    { userId: managerUser.id, userRole: 'Manager', action: 'login', resource: 'Auth' },
-    { userId: adminUser.id, userRole: 'Admin', action: 'user.create', resource: 'User', details: { email: 'shipper@trading.com' } },
-    { userId: customsUser.id, userRole: 'Customs', action: 'workflow.approve', resource: 'DocumentWorkflow' },
-    { userId: adminUser.id, userRole: 'Admin', action: 'workflow.list', resource: 'DocumentWorkflow' },
-    { userId: managerUser.id, userRole: 'Manager', action: 'shipment.view', resource: 'Shipment' },
-  ]
-
-  for (const entry of auditEntries) {
-    await prisma.auditLog.create({
-      data: {
-        ...entry,
-        userOrg: allUsers.find(u => u.id === entry.userId)?.organization || null,
-        details: entry.details ? JSON.stringify(entry.details) : null,
-        ipAddress: '10.0.0.1',
-        userAgent: 'Mozilla/5.0 (Phase 6 Seed)',
-      },
-    })
-  }
-  console.log('    Created 6 audit log entries')
-
-  console.log('Phase 6 seeding complete!')
-  console.log(`  Users: ${allUsers.length}`)
-  console.log(`  Workflows: ${workflowConfigs.length}`)
-  console.log(`  Audit logs: 6`)
+  console.log(`\n  Seed complete! 7 users, ${docs.length} documents, ${workflowConfigs.length} workflows created.`)
+  console.log('  Login credentials: email / password as listed above')
 }
 
 main()
