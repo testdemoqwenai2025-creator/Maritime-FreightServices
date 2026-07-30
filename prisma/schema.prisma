@@ -134,6 +134,7 @@ model Vessel {
   documents  ShipmentDocument[]
   charters   Charter[]
   bookings   Booking[]
+  sensors    IoTSensor[]
 }
 
 model Shipment {
@@ -248,6 +249,7 @@ model Container {
 
   vessel   Vessel?   @relation(fields: [vesselId], references: [id])
   shipment Shipment? @relation(fields: [shipmentId], references: [id])
+  sensors  IoTSensor[]
 }
 
 model TradeData {
@@ -616,5 +618,66 @@ model AuditLog {
   @@index([action])
   @@index([resource, resourceId])
   @@index([createdAt])
+}
+
+// ===========================
+// PHASE 6 SPRINT 2: IOT TELEMETRY
+// ===========================
+
+// IoT Sensor — physical sensor device attached to containers or vessels
+// Types: reefer (temperature/humidity), shock (accelerometer), gps (location tracker)
+
+model IoTSensor {
+  id            String   @id @default(cuid())
+  sensorId      String   @unique          // unique hardware identifier, e.g. "SN-TH-001"
+  name          String                     // human-readable label, e.g. "Reefer Sensor Bay 12"
+  sensorType    String                     // "reefer", "shock", "gps"
+  status        String   @default("Online") // Online, Offline, LowBattery, Error
+  firmwareVer   String?
+  batteryLevel  Float    @default(100)     // percentage 0–100
+  signalStrength Float   @default(100)     // percentage 0–100
+  lastReported  DateTime?
+  // Associations
+  containerId   String?
+  vesselId      String?
+  // Metadata
+  metadata      String?                    // JSON: e.g. {"calibrationDate":"..."}
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  container       Container?         @relation(fields: [containerId], references: [id])
+  vessel          Vessel?            @relation(fields: [vesselId], references: [id])
+  readings        TelemetryReading[]
+
+  @@index([sensorType])
+  @@index([status])
+  @@index([containerId])
+  @@index([vesselId])
+  @@index([lastReported])
+}
+
+// Telemetry Reading — a single data point from an IoT sensor
+// Stores the primary metric (numericValue) plus optional JSON extras
+
+model TelemetryReading {
+  id            String   @id @default(cuid())
+  sensorId      String                     // references IoTSensor.sensorId (NOT the CUID pk)
+  readingType   String                     // "temperature", "humidity", "shock", "latitude", "longitude", "speed", "heading"
+  numericValue  Float                     // primary value (e.g. -18.5°C, 3.8g, 51.92°)
+  unit          String?                    // "°C", "%", "g", "°", "kn", "°T"
+  quality       String   @default("good")  // good, suspect, bad
+  isAnomaly     Boolean  @default(false)   // flagged by analytics
+  anomalyReason String?                    // e.g. "exceeded upper threshold 25°C"
+  // Metadata
+  metadata      String?                    // JSON: extra fields per reading type
+  timestamp     DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  sensor        IoTSensor @relation(fields: [sensorId], references: [sensorId])
+
+  @@index([sensorId, timestamp])
+  @@index([readingType, timestamp])
+  @@index([isAnomaly])
+  @@index([timestamp])
 }
 
